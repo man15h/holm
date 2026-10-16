@@ -91,7 +91,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 - Per-user app grid, bookmarks, theme (auto / dark / light) and icon style (colored / white / grayed)
 - 326 wallpapers or a daily rotation
 - Brand tiles, Dashboard Icons and Simple Icons, custom mono icons
-- Launcher: frecency ranking, `!photos`-style scopes, `!settings` / `!theme` / `!wall` commands, instant answers for maths (`12*(3+4)`), unit conversions (`5 km in mi`, or just `72f`) and time zones (`3pm ist in london`), `/?q=` and OpenSearch so it can be your browser's search engine
+- Launcher: frecency ranking, `!photos`-style scopes, `!settings` / `!theme` / `!wall` commands, emoji search (`:fire`), instant answers for maths (`12*(3+4)`), unit conversions (`5 km in mi`, or just `72f`) and time zones (`3pm ist in london`), `/?q=` and OpenSearch so it can be your browser's search engine
 - Search inside your apps with per-user encrypted credentials ([supported apps](#supported-apps))
 - Weather (Open-Meteo) and a configurable fallback search engine
 - Onboarding slides, setup guides, Markdown privacy policy

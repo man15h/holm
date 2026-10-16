@@ -9,7 +9,8 @@
 	// sections: [{ id, label, layout: 'list'|'grid'|'poster'|'tracks', loading, error, items }]
 	// item:     { key, title, subtitle?, accessory?, appIcon?, svg?, thumbnail?, kind?, color?, badge?, play?,
 	//             iconStyle?, play?: { run }, request?: { label, busy, run }, actions: [{ label, hint?, run }],
-	//             answer?: { from: { value, label }, to: { value, label }, also?: [{ value, label }] } }
+	//             answer?: { from: { value, label }, to: { value, label }, also?: [{ value, label }] },
+	//             emoji? }
 	let {
 		sections = [],
 		selectedKey = null,
@@ -193,12 +194,14 @@
 				<div class="launcher-section" role="group" aria-labelledby="{listId}-{section.id}">
 					<div class="launcher-section-label" id="{listId}-{section.id}">
 						<span>{section.label}</span>
+						<!-- The emoji grid has no captions; the selected one is named here. -->
+						{#if section.layout === 'emoji' && selected?.emoji}<span class="launcher-section-note">{selected.title}{selected.subtitle ? ` ${selected.subtitle}` : ''}</span>{/if}
 						{#if section.loading}<span class="launcher-spinner" role="status" aria-label="Searching"></span>{/if}
 					</div>
 					{#if section.error}
 						<div class="launcher-error">{section.error}</div>
 					{/if}
-					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'answer' ? 'launcher-answers' : 'launcher-rows'}>
+					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'answer' ? 'launcher-answers' : section.layout === 'emoji' ? 'launcher-emoji' : 'launcher-rows'}>
 						{#each { length: section.skeleton || 0 } as _}
 							{#if section.layout === 'tracks'}
 								<div class="launcher-item is-skeleton is-track" aria-hidden="true">
@@ -222,7 +225,7 @@
 								aria-selected={isSel}
 								aria-label={section.layout === 'list' ? undefined : item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
 								tabindex="-1"
-								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
+								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'answer' ? 'is-answer' : section.layout === 'emoji' ? 'is-emoji' : 'is-row'}"
 								class:is-selected={isSel}
 								use:scrollIntoView={isSel}
 								onpointermove={() => { if (!isSel) onselect(item.key); }}
@@ -253,6 +256,8 @@
 											</button>
 										{/each}
 									</div>
+								{:else if item.emoji}
+									<span class="launcher-emoji-glyph" aria-hidden="true">{item.emoji}</span>
 								{:else if section.layout === 'tracks'}
 									<!-- Music: small square cover, title over details. -->
 									<div class="launcher-icon-box launcher-track-art">

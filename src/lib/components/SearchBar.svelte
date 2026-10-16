@@ -13,6 +13,7 @@
 	import { cycleHints } from '$lib/launcher/typedHints.js';
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer } from '$lib/launcher/instant.js';
+	import { emojiQuery, loadEmoji, searchEmoji } from '$lib/launcher/emoji.js';
 
 	const siteConfig = getContext('config');
 	const searchConfig = siteConfig?.search || { enabled: true, url: 'https://www.google.com/search', param: 'q' };
@@ -208,7 +209,8 @@
 		...(scopeHint ? [scopeHint] : []),
 		'Type a command, like “dark” or “wallpaper”',
 		'Do quick maths, like “12 * 7” or “5 km in mi”',
-		`Press / or ${isMac ? '⌘K' : 'Ctrl K'} anywhere to search`
+		`Press / or ${isMac ? '⌘K' : 'Ctrl K'} anywhere to search`,
+		'Find an emoji with “:fire”'
 	]);
 	let placeholderText = $state(FIRST_HINT);
 
@@ -287,8 +289,9 @@
 		// a pending scope shortcut. Either way the user is not asking integrations
 		// to search — skip the dispatch entirely so we don't waste requests on
 		// every keystroke until they hit space and a real query begins.
+		// ":fire" is an emoji search, not a question for the integrations.
 		const trimmed = (query || '').trim();
-		const isBang = trimmed.startsWith('!');
+		const isBang = trimmed.startsWith('!') || !!emojiQuery(trimmed)?.only;
 		if (hasInlineProviders && !isBang) {
 			dispatchSearch(query, scopedProviders);
 		} else {
@@ -321,8 +324,53 @@
 		else window.location.href = url;
 	}
 
-	async function copyText(text) {
-		try { await navigator.clipboard.writeText(text); } catch {}
+	// A short "Copied" note under the bar, since the launcher closes on copy.
+	let copied = $state('');
+	let copiedTimer;
+	async function copyText(text, shown = '') {
+		try {
+			await navigator.clipboard.writeText(text);
+			copied = shown ? `Copied ${shown}` : 'Copied';
+			clearTimeout(copiedTimer);
+			copiedTimer = setTimeout(() => (copied = ''), 1600);
+		} catch {}
+	}
+
+	// ── Emoji ─────────────────────────────────────────────────────
+	// ":fire" shows only emoji; "fire emoji" adds a row to the results.
+	// The data loads the first time either is typed.
+	const emojiQ = $derived(activeScope ? null : emojiQuery(query));
+	let emojiIndex = $state(null);
+	let emojiError = $state('');
+	$effect(() => {
+		if (!emojiQ || emojiIndex || emojiError) return;
+		loadEmoji()
+			.then((index) => (emojiIndex = index))
+			.catch(() => (emojiError = 'Couldn’t load emoji'));
+	});
+
+	function emojiSection(term, limit) {
+		const found = emojiIndex ? searchEmoji(emojiIndex, term, limit) : [];
+		return {
+			id: 'emoji',
+			label: 'Emoji',
+			layout: 'emoji',
+			loading: !emojiIndex && !emojiError,
+			error: emojiError,
+			items: found.map((e) => {
+				const code = e.codes[0] ? `:${e.codes[0]}:` : '';
+				return {
+					key: `emoji:${e.emoji}`,
+					title: e.name,
+					subtitle: code,
+					emoji: e.emoji,
+					actions: [
+						{ label: 'Copy emoji', run: () => { copyText(e.emoji, e.emoji); finish(); } },
+						...(code ? [{ label: 'Copy shortcode', run: () => { copyText(code, code); finish(); } }] : [])
+					]
+				};
+			})
+		};
 	}
 
 	// Which value of the answer card was just copied, for its "Copied" label.
@@ -330,7 +378,7 @@
 	let answerCopied = $state(null);
 	let answerCopiedTimer;
 	function copyAnswer(value, index) {
-		copyText(value.copy);
+		copyText(value.copy, value.value);
 		answerCopied = { index, query };
 		clearTimeout(answerCopiedTimer);
 		answerCopiedTimer = setTimeout(() => (answerCopied = null), 1500);
@@ -511,6 +559,11 @@
 			return out;
 		}
 
+		if (emojiQ?.only) {
+			out.push(emojiSection(emojiQ.term, 48));
+			return out;
+		}
+
 		// Nothing typed yet: recents first, then a few commands.
 		if (!q && !activeScope) {
 			const ranked = apps
@@ -574,6 +627,8 @@
 				.sort((x, y) => y.s - x.s)
 				.slice(0, 3);
 			if (scoredCmds.length) out.push({ id: 'commands', label: 'Commands', items: scoredCmds.map((x) => commandItem(x.a)) });
+
+			if (emojiQ) out.push(emojiSection(emojiQ.term, 16));
 		}
 
 		// Results from connected apps, one section each. A result marked
@@ -974,7 +1029,11 @@
 
 	const listId = 'launcher-list';
 	const emptyText = $derived(
-		(query || '').trim().startsWith('!') && !activeScope ? 'No command or scope by that name. Type ! on its own to see them all.' : ''
+		(query || '').trim().startsWith('!') && !activeScope
+			? 'No command or scope by that name. Type ! on its own to see them all.'
+			: emojiQ?.only && emojiIndex
+				? `No emoji for “${emojiQ.term}”`
+				: ''
 	);
 </script>
 
@@ -1033,6 +1092,10 @@
 			<kbd class="hero-search-kbd hidden md:inline-flex items-center gap-0.5 text-[0.7rem] py-1 px-2 rounded border font-mono shrink-0">{#if macKeys}<svg class="kbd-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Command"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3Z"/></svg>{:else}Ctrl&nbsp;{/if}K</kbd>
 		{/if}
 	</form>
+
+	{#if copied}
+		<div class="launcher-copied" role="status">{copied}</div>
+	{/if}
 
 	{#if isPaletteOpen}
 		<SearchResults
