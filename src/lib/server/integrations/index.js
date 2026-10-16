@@ -11,6 +11,7 @@
 import { getIntegrationsConfig, getAppsConfig } from '../config.js';
 import immich from './immich.js';
 import paperless from './paperless.js';
+import papra from './papra.js';
 import nextcloud from './nextcloud.js';
 import planka from './planka.js';
 import karakeep from './karakeep.js';
@@ -26,7 +27,7 @@ import miniflux from './miniflux.js';
 import komga from './komga.js';
 import kavita from './kavita.js';
 
-const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita];
+const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita, papra];
 const BY_ID = new Map(KNOWN_ADAPTERS.map((a) => [a.id, a]));
 
 function resolveApp(id) {
