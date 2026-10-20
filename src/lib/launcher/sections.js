@@ -6,7 +6,7 @@ import { matchScore } from './match.js';
 
 // Documents and files first: on a home dashboard a search is most often for
 // a paper or a file. Media and photos follow.
-const PROVIDER_KIND_ORDER = { document: 0, file: 1, event: 2, card: 3, bookmark: 4, media: 5, photo: 6 };
+const PROVIDER_KIND_ORDER = { document: 0, file: 1, event: 2, card: 3, bookmark: 4, model: 5, collection: 6, tag: 7, media: 8, photo: 9 };
 
 // The top hit, Spotlight-style: the one result from any app whose title is
 // the query, or starts with it. Ties go to the earlier section. Null when no

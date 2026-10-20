@@ -324,6 +324,14 @@ integrations:
       search: true
       widgets: false
 
+  thingport:
+    enabled: true
+    name: "Thingport"
+    default_url: "https://thingport.example.com"
+    surfaces:
+      search: true
+      widgets: false
+
 # ── Wallpapers ──────────────────────────────────────────────
 wallpapers:
   enabled: true                               # 326 wallpapers from DistroTube's set, fetched through Holm

@@ -74,7 +74,7 @@ export async function POST({ cookies, url, request, fetch }) {
 				timer = setTimeout(() => reject(new DOMException('Search timed out', 'TimeoutError')), SEARCH_TIMEOUT_MS);
 			})
 		]);
-		return json({ results: result?.results || [] });
+		return json({ results: result?.results || [], more: result?.more || null });
 	} catch (err) {
 		const status = err?.name === 'TimeoutError' ? 504 : 502;
 		return json({ error: `Search failed: ${describeFetchError(err, SEARCH_TIMEOUT_MS)}` }, { status });
