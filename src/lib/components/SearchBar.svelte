@@ -252,6 +252,7 @@
 				...providerResults,
 				[provider.providerId]: {
 					results: data.results || [],
+					more: data.more || null,
 					loading: false,
 					error: ''
 				}
@@ -630,7 +631,9 @@
 			const layout = p.layout || (kind === 'photo' ? 'grid' : kind === 'media' ? 'poster' : 'list');
 			// Songs sit three to a row: with a "More" card, five leave it room on
 			// the second row instead of a row of its own.
-			const more = p.searchUrl && results.length > (layout === 'grid' ? 6 : layout === 'poster' ? 8 : 6);
+			// The provider's own results page for this query, else the app itself.
+			const moreUrl = data.more || p.searchUrl;
+			const more = moreUrl && results.length > (layout === 'grid' ? 6 : layout === 'poster' ? 8 : 6);
 			const max = layout === 'grid' ? 6 : layout === 'poster' ? 8 : layout === 'tracks' && more ? 5 : 6;
 			return {
 				id: `p-${p.providerId}`,
@@ -670,13 +673,13 @@
 						accessory: layout === 'list' ? p.integrationName : '',
 						actions: resultActions(key, p, r)
 					};
-				}), ...(results.length > max && p.searchUrl ? [{
+				}), ...(results.length > max && moreUrl ? [{
 					key: `more:${p.providerId}`,
 					title: `More in ${p.integrationName}`,
 					more: true,
-					url: p.searchUrl,
+					url: moreUrl,
 					svg: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
-					actions: linkActions(`more:${p.providerId}`, p.searchUrl, true)
+					actions: linkActions(`more:${p.providerId}`, moreUrl, true)
 				}] : [])]
 			};
 		});

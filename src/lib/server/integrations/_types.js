@@ -57,7 +57,10 @@
  * @property {'media'|'photo'} [kind]          Results are posters or photos, so the bar shows placeholders of that shape while the first ones load
  * @property {'poster'|'tracks'|'grid'|'list'} [layout]  Overrides the layout picked from kind: media = poster, photo = grid, else list
  * @property {'video'} [shelf]                Movies and shows from every provider with shelf 'video' share one "Movies & TV" row
- * @property {(ctx: AdapterContext & { query: string, limit: number }) => Promise<{ results: SearchResultItem[] }>} query
+ * @property {(ctx: AdapterContext & { query: string, limit: number }) => Promise<{ results: SearchResultItem[], more?: string }>} query
+ *   `more` is where "More in <app>" goes when there are more results than the
+ *   section shows, e.g. the app's own results page for this query. Without it
+ *   the link opens the app's URL.
  */
 
 /**

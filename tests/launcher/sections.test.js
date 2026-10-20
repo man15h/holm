@@ -46,3 +46,15 @@ test('the top hit is a title equal to the query or starting with it, never a loo
 	assert.equal(topHit('in', [docs, media]), null);
 	assert.equal(topHit('more', [section('x', 'file', [{ key: 'm', title: 'More in Files', more: true }])]), null);
 });
+
+test('Thingport rows sit after bookmarks and before media: models, collections, tags', () => {
+	const out = arrangeProviderSections([
+		section('p-photos', 'photo', [{ key: 'p' }]),
+		section('p-tags', 'tag', [{ key: 't' }]),
+		section('p-media', 'media', [{ key: 'v' }]),
+		section('p-collections', 'collection', [{ key: 'c' }]),
+		section('p-models', 'model', [{ key: 'm' }]),
+		section('p-bookmarks', 'bookmark', [{ key: 'b' }])
+	]);
+	assert.deepEqual(out.map((s) => s.id), ['p-bookmarks', 'p-models', 'p-collections', 'p-tags', 'p-media', 'p-photos']);
+});
