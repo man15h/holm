@@ -40,6 +40,7 @@
  * @property {string} [openLabel]               Label for opening `href`, e.g. 'Play'; defaults to 'Open'
  * @property {object} [detail]                  Params for the adapter's `details`; a click opens the detail view instead of `href`
  * @property {{ key: string, label: string, params: object }} [action]  Runs `actions[key]` with `params` from a button on the result (e.g. 'Request'); a click still opens `href`
+ * @property {{ label: string, params: object }} [filter]  A tag, list or folder to search inside: picking the result scopes the bar to `<app> › label` and asks the app's `filters` providers again with `params` as `filter`; `href` moves to "Open in <app>"
  * @property {Object} [meta]
  * @property {string} [meta.kind]               'photo' triggers the photo-grid variant in SearchResults
  * @property {string} [meta.takenAt]
@@ -57,10 +58,14 @@
  * @property {'media'|'photo'} [kind]          Results are posters or photos, so the bar shows placeholders of that shape while the first ones load
  * @property {'poster'|'tracks'|'grid'|'list'} [layout]  Overrides the layout picked from kind: media = poster, photo = grid, else list
  * @property {'video'} [shelf]                Movies and shows from every provider with shelf 'video' share one "Movies & TV" row
- * @property {(ctx: AdapterContext & { query: string, limit: number }) => Promise<{ results: SearchResultItem[], more?: string }>} query
+ * @property {boolean} [scoped]                Asked only once the user has scoped the bar to this app (`!<shortcut>`): sections such as Tags or Lists that would crowd an everyday search
+ * @property {boolean} [filters]               Searches inside a picked `filter`: it receives `filter`, and is the only kind of provider asked while one is picked
+ * @property {(ctx: AdapterContext & { query: string, limit: number, filter?: object }) => Promise<{ results: SearchResultItem[], more?: string }>} query
  *   `more` is where "More in <app>" goes when there are more results than the
  *   section shows, e.g. the app's own results page for this query. Without it
- *   the link opens the app's URL.
+ *   the link opens the app's URL. `filter` is a picked result's
+ *   `filter.params`, sent back by the browser: check it before use. With a
+ *   filter, `query` may be empty: list what is inside it.
  */
 
 /**

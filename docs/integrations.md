@@ -14,7 +14,7 @@ Holm has two kinds of app support.
 | Nextcloud | Files | URL + username + app password | `!f` |
 | Jellyfin | Movies, shows and music | Quick Connect sign-in, no key to copy | `!jf` |
 | Planka | Cards, by name (cached up to 5 minutes, `cache_ttl`) | URL + API key | `!p` |
-| Karakeep | Bookmarks (full text) | URL + API key | `!b` |
+| Karakeep | Bookmarks (full text); under `!b`, tags and lists to search inside | URL + API key | `!b` |
 | Linkwarden | Links by name, URL, description and tags (full text with Meilisearch) | URL + access token | `!lw` |
 | Plex | Movies, shows and music | Code at plex.tv/link, no key to copy | `!plex` |
 | Navidrome | Artists, albums and songs; optional player for songs | URL + username + password (only a derived token is kept) | `!nd` |
@@ -126,7 +126,8 @@ An integration is one file plus one import line. The settings form, API routes a
    			// layout: 'tracks',     // optional: override the layout picked from kind
    			// shelf: 'video',       // optional: join the shared "Movies & TV" row
    			async query({ config, query, limit, fetch }) {
-   				return { results: [{ id, title, subtitle, thumbnail, href }] };
+   				// more: optional, where "More in My App" goes (e.g. its results page)
+   				return { results: [{ id, title, subtitle, thumbnail, href }], more };
    			}
    		}
    	},
@@ -137,6 +138,35 @@ An integration is one file plus one import line. The settings form, API routes a
    	}
    };
    ```
+
+   To let people search inside a tag, list or folder once they've scoped to
+   the app, add a `scoped: true` provider whose results carry a `filter`, and
+   mark the provider that searches inside it `filters: true`:
+
+   ```js
+   	tags: {
+   		label: 'Tags',
+   		mode: 'inline',
+   		scoped: true,            // asked only under !m, never in an everyday search
+   		async query({ config, query }) {
+   			return { results: [{ id, title: '#recipes', href, filter: { label: '#recipes', params: { tag: 'recipes' } }, meta: { kind: 'tag' } }] };
+   		}
+   	},
+   	items: {
+   		label: 'Items',
+   		mode: 'inline',
+   		filters: true,           // the one asked inside a picked filter
+   		async query({ config, query, filter }) {
+   			// filter is the picked result's filter.params, sent back by the
+   			// browser: check it. query may be empty: list what's inside.
+   		}
+   	}
+   ```
+
+   Picking `#recipes` turns the chip into `My App › #recipes` and asks only
+   the `filters` providers again, with the filter. Typing narrows inside it;
+   Backspace on an empty box or Escape steps back to the app's scope. The row's
+   `href` stays one keypress away as "Open in My App" (⌘↵).
 
 2. Import it in `src/lib/server/integrations/index.js` and add it to `KNOWN_ADAPTERS`.
 3. Add an example entry under `integrations:` in `config.example.yml`.

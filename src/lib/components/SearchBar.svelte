@@ -10,6 +10,7 @@
 	import { bestScore } from '$lib/launcher/match.js';
 	import { buildActions, matchBang } from '$lib/launcher/actions.js';
 	import { arrangeProviderSections, topHit } from '$lib/launcher/sections.js';
+	import { providersFor } from '$lib/launcher/scope.js';
 	import { cycleHints } from '$lib/launcher/typedHints.js';
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
@@ -96,6 +97,8 @@
 					kind: prov.kind,
 					layout: prov.layout,
 					shelf: prov.shelf,
+					scoped: prov.scoped,
+					filters: prov.filters,
 					// Navidrome's player widget: songs play in Holm instead of opening.
 					player: it.userState?.surfaces?.widgets === true && (it.availableSurfaces || []).includes('widgets'),
 					// The Calendar's CalDAV URL is no page to browse; its web address is.
@@ -145,11 +148,14 @@
 		untrack(maybePromoteScope);
 	});
 
-	const scopedProviders = $derived(
-		activeScope
-			? inlineProviders.filter((p) => p.integrationId === activeScope)
-			: inlineProviders
-	);
+	// A tag or list picked inside the scope (`Karakeep › #recipes`): only
+	// that app's `filters` providers are asked, with its params.
+	let activeFilter = $state(null);
+	$effect(() => {
+		if (activeFilter && activeFilter.integrationId !== activeScope) activeFilter = null;
+	});
+
+	const scopedProviders = $derived(providersFor(inlineProviders, activeScope, activeFilter));
 
 	const activeIntegration = $derived(
 		activeScope ? $integrationsStore.integrations.find((it) => it.id === activeScope) : null
@@ -230,7 +236,7 @@
 		return cycleHints(PLACEHOLDER_HINTS, (text) => (placeholderText = text), () => prefersReducedMotion.current);
 	});
 
-	async function fireOneProvider(provider, q, signal) {
+	async function fireOneProvider(provider, q, signal, key, filter) {
 		providerResults = {
 			...providerResults,
 			[provider.providerId]: { ...(providerResults[provider.providerId] || {}), loading: true, error: '' }
@@ -239,7 +245,7 @@
 			const res = await fetch('/api/search', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ provider: provider.providerId, query: q, limit: 24, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+				body: JSON.stringify({ provider: provider.providerId, query: q, limit: 24, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(filter ? { filter: filter.params } : {}) }),
 				signal
 			});
 			if (!res.ok) {
@@ -247,7 +253,7 @@
 				throw new Error(err.error || `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			if (lastDispatched !== q) return; // a newer query has overtaken us
+			if (lastDispatched !== key) return; // a newer query has overtaken us
 			providerResults = {
 				...providerResults,
 				[provider.providerId]: {
@@ -258,7 +264,7 @@
 				}
 			};
 		} catch (err) {
-			if (signal.aborted || lastDispatched !== q) return;
+			if (signal.aborted || lastDispatched !== key) return;
 			providerResults = {
 				...providerResults,
 				[provider.providerId]: {
@@ -279,18 +285,20 @@
 	// we still don't want a Planka cards fetch on "p".
 	const MIN_REMOTE_QUERY_LENGTH = 3;
 
-	function dispatchSearch(q, providers) {
+	// Inside a picked filter an empty query lists what's in it.
+	function dispatchSearch(q, providers, filter) {
 		cancelSearch();
 		const trimmed = (q || '').trim();
-		if (trimmed.length < MIN_REMOTE_QUERY_LENGTH) {
+		if (trimmed.length < MIN_REMOTE_QUERY_LENGTH && !(filter && !trimmed)) {
 			providerResults = {};
 			return;
 		}
 		debounceTimer = setTimeout(() => {
-			lastDispatched = trimmed;
+			const key = filter ? `${JSON.stringify(filter.params)}\n${trimmed}` : trimmed;
+			lastDispatched = key;
 			searchAbort = new AbortController();
 			for (const provider of providers) {
-				fireOneProvider(provider, trimmed, searchAbort.signal);
+				fireOneProvider(provider, trimmed, searchAbort.signal, key, filter);
 			}
 		}, 250);
 	}
@@ -304,7 +312,7 @@
 		const trimmed = (query || '').trim();
 		const isBang = trimmed.startsWith('!');
 		if (hasInlineProviders && !isBang && !isCalculation(trimmed)) {
-			dispatchSearch(query, scopedProviders);
+			dispatchSearch(query, scopedProviders, activeFilter);
 		} else {
 			cancelSearch();
 			providerResults = {};
@@ -413,6 +421,19 @@
 		const extra = resultAction(key, p, r);
 		const all = [...play, ...(extra?.run ? [...links, extra] : links)];
 		return r.detail ? [{ label: 'Show details', run: () => openDetail(key, p, r) }, ...all] : all;
+	}
+
+	// A tag or list: Enter searches inside it, ⌘↵ opens it in its app.
+	function filterActions(key, p, r) {
+		const inside = { label: `Search in ${r.filter.label}`, run: () => drillIn(p, r) };
+		return [inside, ...(r.href ? linkActions(key, r.href, true, `Open in ${p.integrationName}`) : [])];
+	}
+
+	function drillIn(p, r) {
+		activeFilter = { integrationId: p.integrationId, label: r.filter.label, params: r.filter.params };
+		query = '';
+		inlineOpen = true;
+		inputEl?.focus();
 	}
 
 	// Detail view (Spotlight-style) for a result with `detail` params: it
@@ -642,7 +663,7 @@
 				label: p.label,
 				layout,
 				kind,
-				loading: !!data.loading && q.length >= 3,
+				loading: !!data.loading && (q.length >= 3 || !!activeFilter),
 				error: data.error || '',
 				items: [...results.slice(0, max).map((r) => {
 					const key = `r:${p.providerId}:${r.id}`;
@@ -671,7 +692,7 @@
 						source: layout === 'poster' ? sourceOf(p, r) : null,
 						tags: r.tags,
 						accessory: layout === 'list' ? p.integrationName : '',
-						actions: resultActions(key, p, r)
+						actions: r.filter ? filterActions(key, p, r) : resultActions(key, p, r)
 					};
 				}), ...(results.length > max && moreUrl ? [{
 					key: `more:${p.providerId}`,
@@ -887,13 +908,14 @@
 	function handleInputKeydown(e) {
 		if (resultsEl?.panelKey(e)) return;
 
-		// Escape steps back one level: action panel, query, scope, then close.
+		// Escape steps back one level: action panel, query, filter, scope, then close.
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			e.stopPropagation();
 			if (panelOpen) panelOpen = false;
 			else if (detailView) closeDetail();
 			else if (query) query = '';
+			else if (activeFilter) activeFilter = null;
 			else if (activeScope) activeScope = null;
 			else { inlineOpen = false; inputEl?.blur(); }
 			return;
@@ -919,6 +941,12 @@
 				item.showDetail();
 				return;
 			}
+		}
+		// Backspace at empty input inside a filter → back to the app's scope
+		if (e.key === 'Backspace' && activeFilter && query === '' && inputEl?.selectionStart === 0) {
+			e.preventDefault();
+			activeFilter = null;
+			return;
 		}
 		// Backspace at empty input with a chip → clear the scope and put "!" back in the input
 		if (e.key === 'Backspace' && activeScope && query === '' && inputEl?.selectionStart === 0) {
@@ -1021,7 +1049,7 @@
 
 		{#if activeIntegration}
 			<span class="scope-chip flex items-center gap-1 shrink-0 ml-2 text-[0.7rem] font-mono px-2 py-1 rounded-lg border">
-				{activeIntegration.name}
+				{activeIntegration.name}{#if activeFilter}<span class="text-content-dim" aria-hidden="true">›</span>{activeFilter.label}{/if}
 				<button
 					type="button"
 					class="scope-chip-clear bg-transparent border-none cursor-pointer leading-none p-0 ml-0.5"
@@ -1037,7 +1065,7 @@
 			type="text"
 			name={searchConfig.param || 'q'}
 			class="hero-search-input w-full h-[48px] md:h-[52px] bg-transparent border-none px-3 md:px-4 outline-none font-mono"
-			placeholder={activeIntegration ? `Search in ${activeIntegration.name}…` : placeholderText}
+			placeholder={activeFilter ? `Search in ${activeFilter.label}…` : activeIntegration ? `Search in ${activeIntegration.name}…` : placeholderText}
 			autocomplete="off"
 			autocapitalize="off"
 			spellcheck="false"

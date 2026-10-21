@@ -1,7 +1,10 @@
 // Karakeep integration adapter.
 //
 // Surfaces:
-//   - searchProviders.bookmarks — searches bookmarks via full-text search API
+//   - searchProviders.bookmarks — searches bookmarks via full-text search API;
+//     a tag or list filter is sent as Karakeep's own `#"tag"` / `list:"name"`
+//   - searchProviders.tags, .lists — only under !b: picking one searches
+//     inside it
 
 /** @type {import('./_types.js').IntegrationAdapter} */
 const adapter = {
@@ -61,9 +64,12 @@ const adapter = {
 		bookmarks: {
 			label: 'Bookmarks',
 			mode: 'inline',
-			async query({ config, query, limit, fetch }) {
+			filters: true,
+			async query({ config, query, limit, fetch, filter }) {
 				if (!config?.url || !config?.apiKey) return { results: [] };
-				const trimmed = (query || '').trim();
+				const scope = filterQuery(filter);
+				if (scope === null) return { results: [] };
+				const trimmed = [scope, (query || '').trim()].filter(Boolean).join(' ');
 				if (!trimmed) return { results: [] };
 
 				const base = stripTrailingSlash(config.url);
@@ -97,7 +103,65 @@ const adapter = {
 							href: isLink ? content.url : `${base}/dashboard/preview/${bm.id}`,
 							meta: { kind: 'bookmark' }
 						};
-					})
+					}),
+					more: `${base}/dashboard/search?${new URLSearchParams({ q: trimmed })}`
+				};
+			}
+		},
+		tags: {
+			label: 'Tags',
+			mode: 'inline',
+			scoped: true,
+			async query({ config, query, limit, fetch }) {
+				const needle = (query || '').trim().toLowerCase();
+				if (!config?.url || !config?.apiKey || !needle) return { results: [] };
+				const base = stripTrailingSlash(config.url);
+				// Older Karakeeps ignore nameContains and send every tag, so
+				// the match is checked here too.
+				const params = new URLSearchParams({ nameContains: needle, sort: 'usage' });
+				const res = await fetch(`${base}/api/v1/tags?${params}`, { method: 'GET', headers: authHeaders(config) });
+				if (!res.ok) throw new Error(`Karakeep tags failed: ${res.status}`);
+				const data = await res.json();
+				return {
+					results: (data?.tags || [])
+						.filter((t) => filterable(t?.name) && t.name.toLowerCase().includes(needle))
+						.sort((a, b) => (b.numBookmarks || 0) - (a.numBookmarks || 0))
+						.slice(0, Math.min(limit || 10, 25))
+						.map((t) => ({
+							id: String(t.id),
+							title: `#${t.name}`,
+							subtitle: bookmarkCount(t.numBookmarks),
+							href: `${base}/dashboard/tags/${encodeURIComponent(t.id)}`,
+							filter: { label: `#${t.name}`, params: { tag: t.name } },
+							meta: { kind: 'tag' }
+						}))
+				};
+			}
+		},
+		lists: {
+			label: 'Lists',
+			mode: 'inline',
+			scoped: true,
+			async query({ config, query, limit, fetch }) {
+				const needle = (query || '').trim().toLowerCase();
+				if (!config?.url || !config?.apiKey || !needle) return { results: [] };
+				const base = stripTrailingSlash(config.url);
+				const res = await fetch(`${base}/api/v1/lists`, { method: 'GET', headers: authHeaders(config) });
+				if (!res.ok) throw new Error(`Karakeep lists failed: ${res.status}`);
+				const data = await res.json();
+				return {
+					results: (data?.lists || [])
+						// list:"name" only finds the user's own lists, not ones shared with them.
+						.filter((l) => filterable(l?.name) && (!l.userRole || l.userRole === 'owner') && l.name.toLowerCase().includes(needle))
+						.slice(0, Math.min(limit || 10, 25))
+						.map((l) => ({
+							id: String(l.id),
+							title: l.icon ? `${l.icon} ${l.name}` : l.name,
+							subtitle: l.type === 'smart' ? 'Smart list' : 'List',
+							href: `${base}/dashboard/lists/${encodeURIComponent(l.id)}`,
+							filter: { label: l.name, params: { list: l.name } },
+							meta: { kind: 'collection' }
+						}))
 				};
 			}
 		}
@@ -125,6 +189,26 @@ const adapter = {
 
 function stripTrailingSlash(url) {
 	return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+// Karakeep's query language quotes a name but can't escape a quote in it,
+// so those tags and lists aren't offered as filters.
+function filterable(name) {
+	return typeof name === 'string' && name.length > 0 && name.length <= 200 && !name.includes('"');
+}
+
+// The filter from a picked tag or list as Karakeep search syntax: '' for
+// none, null when it isn't one this adapter made.
+function filterQuery(filter) {
+	if (!filter) return '';
+	if (filterable(filter.tag)) return `#"${filter.tag}"`;
+	if (filterable(filter.list)) return `list:"${filter.list}"`;
+	return null;
+}
+
+function bookmarkCount(n) {
+	const count = Number(n) || 0;
+	return `${count} bookmark${count === 1 ? '' : 's'}`;
 }
 
 function authHeaders(config) {

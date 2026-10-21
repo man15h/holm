@@ -115,7 +115,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Mealie | Recipes |
 | Seerr | Movies and shows: play or request (signs in through Jellyfin or Plex) |
 | Planka | Cards, by name |
-| Karakeep | Bookmarks |
+| Karakeep | Bookmarks; under `!b`, tags and lists to search inside |
 | Linkwarden | Links |
 | Calendar (CalDAV) | Events, with optional reminders and upcoming events on the page |
 | Miniflux | Articles from your feeds |

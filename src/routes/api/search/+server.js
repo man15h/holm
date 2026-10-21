@@ -15,13 +15,15 @@ import { validZone } from '$lib/server/integrations/ical.js';
 const SEARCH_TIMEOUT_MS = 8000;
 const UPSTREAM_TIMEOUT_MS = 30000;
 
-// POST /api/search   body: { provider, query, limit?, timeZone? }
+// POST /api/search   body: { provider, query, limit?, timeZone?, filter? }
 //
 // `provider` is the colon-joined "<integrationId>:<providerKey>" string
 // chosen by the user (e.g. "immich:photos"). The dispatcher resolves the
 // adapter, loads the user's stored credentials, and invokes the adapter's
 // query() function. Adapters never see another user's data — the connection
-// is keyed on the session username.
+// is keyed on the session username. `filter` is the params of a result the
+// user drilled into (a tag, a list); only providers with `filters` get it,
+// and they check it, since it comes from the browser.
 
 export async function POST({ cookies, url, request, fetch }) {
 	const user = getSessionUser(cookies, url);
@@ -40,6 +42,7 @@ export async function POST({ cookies, url, request, fetch }) {
 	const query = String(body?.query || '');
 	const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(body.limit, 1), 50) : 20;
 	const timeZone = validZone(body?.timeZone) ? body.timeZone : 'UTC';
+	const filter = body?.filter && typeof body.filter === 'object' && !Array.isArray(body.filter) ? body.filter : null;
 
 	const [integrationId, providerKey] = provider.split(':');
 	if (!integrationId || !providerKey) {
@@ -51,6 +54,7 @@ export async function POST({ cookies, url, request, fetch }) {
 
 	const searchProvider = adapter.searchProviders?.[providerKey];
 	if (!searchProvider) return json({ error: 'Unknown search provider' }, { status: 404 });
+	if (filter && !searchProvider.filters) return json({ error: 'This search provider takes no filter' }, { status: 400 });
 
 	const conn = await getConnection(user.username, adapter.id);
 	if (!conn?.connected) {
@@ -65,6 +69,7 @@ export async function POST({ cookies, url, request, fetch }) {
 			query,
 			limit,
 			timeZone,
+			...(filter ? { filter } : {}),
 			fetch: withDeadline(fetch, UPSTREAM_TIMEOUT_MS)
 		});
 		pending.catch(() => {}); // may settle after we've already answered
