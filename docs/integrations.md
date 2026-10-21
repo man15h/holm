@@ -26,7 +26,7 @@ Holm has two kinds of app support.
 | Komga | Comics, manga and book series (full text) | URL + API key (Komga 1.20 or later) | `!komga` |
 | Kavita | Manga, comics and book series | URL + Auth Key (Kavita 0.8.9 or later) | `!kavita` |
 | Papra | Documents, by name and content | URL + read-only API token + organization ID | `!papra` |
-| Thingport | 3D models, collections and tags; "More" opens Thingport's results page | URL + API token | `!tp` |
+| Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.
 

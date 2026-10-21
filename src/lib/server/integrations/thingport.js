@@ -2,8 +2,8 @@
 //
 // Surfaces:
 //   - searchProviders.models      — 3D models, ranked by Thingport's own search
-//   - searchProviders.collections — collections of models, from the same search
-//   - searchProviders.tags        — tags with their model counts, from the same search
+//   - searchProviders.collections — collections of models, from the same search; only under !tp
+//   - searchProviders.tags        — tags with their model counts, from the same search; only under !tp
 //
 // All three providers read one GET /api/search response: holm queries each
 // provider separately, so they share the in-flight request instead of
@@ -99,6 +99,7 @@ const adapter = {
 		collections: {
 			label: 'Collections',
 			mode: 'inline',
+			scoped: true,
 			async query({ config, query, fetch }) {
 				const found = await search(config, query, fetch);
 				if (!found) return { results: [] };
@@ -118,6 +119,7 @@ const adapter = {
 		tags: {
 			label: 'Tags',
 			mode: 'inline',
+			scoped: true,
 			async query({ config, query, fetch }) {
 				const found = await search(config, query, fetch);
 				if (!found) return { results: [] };

@@ -122,7 +122,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Komga | Comics, manga and book series |
 | Kavita | Manga, comics and book series |
 | Papra | Documents, by name and content |
-| Thingport | 3D models, collections and tags |
+| Thingport | 3D models; under `!tp`, collections and tags too |
 
 Adding an integration is one adapter file and one import line. [docs/integrations.md](docs/integrations.md) covers enabling, connecting, the security model and writing a new adapter.
 

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { providersFor } from '../../src/lib/launcher/scope.js';
 import { adapterToClient } from '../../src/lib/server/integrations/serialize.js';
 import karakeep from '../../src/lib/server/integrations/karakeep.js';
+import thingport from '../../src/lib/server/integrations/thingport.js';
 
 const providers = [
 	{ providerId: 'karakeep:bookmarks', integrationId: 'karakeep', filters: true },
@@ -37,4 +38,14 @@ test('the browser learns which providers are scope-only or take a filter', () =>
 		Object.fromEntries(Object.entries(searchProviders).map(([k, p]) => [k, [p.scoped, p.filters]])),
 		{ bookmarks: [false, true], tags: [true, false], lists: [true, false] }
 	);
+});
+
+test('Thingport shows Models in an everyday search, and Collections and Tags only under !tp', () => {
+	const tp = Object.entries(adapterToClient(thingport).searchProviders).map(([key, p]) => ({
+		providerId: `thingport:${key}`,
+		integrationId: 'thingport',
+		...p
+	}));
+	assert.deepEqual(ids(providersFor(tp, null, null)), ['thingport:models']);
+	assert.deepEqual(ids(providersFor(tp, 'thingport', null)), ['thingport:models', 'thingport:collections', 'thingport:tags']);
 });
