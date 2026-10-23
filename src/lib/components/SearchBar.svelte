@@ -917,7 +917,11 @@
 			else if (query) query = '';
 			else if (activeFilter) activeFilter = null;
 			else if (activeScope) activeScope = null;
-			else { inlineOpen = false; inputEl?.blur(); }
+			else { inlineOpen = false; inputEl?.blur(); return; }
+			// Still open, so the arrows must keep working: keyboard extensions
+			// (e.g. Vimium) blur a text field on Escape. After this event, so
+			// after their blur.
+			setTimeout(() => inputEl?.focus({ preventScroll: true }), 0);
 			return;
 		}
 		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
