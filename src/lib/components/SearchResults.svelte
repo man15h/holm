@@ -28,6 +28,10 @@
 	} = $props();
 
 	const flat = $derived(sections.flatMap((s) => s.items));
+	// The ⌘K panel floats over the list, so a short list (one web result) would
+	// cut it off at the top: the launcher grows to fit it while it's open. 54px
+	// is its offset above the footer (46px) plus a gap above it.
+	let actionsHeight = $state(0);
 	const selected = $derived(flat.find((i) => i.key === selectedKey) || null);
 	$effect(() => {
 		if (panelOpen) panelIndex = 0;
@@ -134,7 +138,7 @@
 	}
 </script>
 
-<div class="launcher-panel hero-search-results">
+<div class="launcher-panel hero-search-results" style:min-height={panelOpen && actionsHeight ? `${actionsHeight + 54}px` : null}>
 	{#if detail}
 		<!-- Detail view: one title, Spotlight-style, in place of the list. -->
 		<div class="launcher-scroll launcher-detail" role="region" aria-label="Details for {detail.title}">
@@ -422,7 +426,7 @@
 	</div>
 
 	{#if panelOpen && selected && !detail}
-		<div class="launcher-actions" role="menu" aria-label="Actions for {selected.title}">
+		<div class="launcher-actions" role="menu" aria-label="Actions for {selected.title}" bind:offsetHeight={actionsHeight}>
 			<div class="launcher-actions-title">{selected.title}</div>
 			{#each selected.actions as action, i}
 				<button
