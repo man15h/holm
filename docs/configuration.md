@@ -175,9 +175,11 @@ apps:
 
 Holm's server does every check and keeps the answer, so one check per `every` serves everyone, however many are looking. People only get health for apps they can see (`groups:`), from `/api/health`, which needs a session. The URL and key stay on the server.
 
-**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check. Kener's API doesn't say why a monitor is down, so when one isn't up its tip shows the monitor's **description**: write the reason there ("Moving to a new disk, back tonight"). A changed description shows within 10 minutes. A Kener **maintenance** happening now, or an **incident** not yet resolved, outranks the last result: the tile shows its impact (maintenance amber, degraded amber, or down) with its title, and a maintenance's end time. Both are read once per `every`; a maintenance wins over an incident.
+**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check. Kener's API doesn't say why a monitor is down, so when one isn't up its tip shows the monitor's **description**: write the reason there ("Moving to a new disk, back tonight"). A changed description shows within 10 minutes. A Kener **maintenance** happening now, or an **incident** not yet resolved, outranks the last result: the tile shows its impact (maintenance amber, degraded amber, or down) with its title, a maintenance's end time, and below them its description or the incident's latest update. Both are read once per `every`; a maintenance wins over an incident.
 
 **Uptime Kuma**: create a key under Settings → API Keys; Holm reads `/metrics` with it once per `every` for all apps. Pending (a failed check being retried) shows amber.
+
+Each person can turn the dots off in Configure → Widgets → **App status**; that card only appears when one of their apps has a check.
 
 ## Icons
 

@@ -10,7 +10,7 @@ import { substituteEnvVars } from './envVars.js';
 import { searchOnFocusError } from '../searchOnFocus.js';
 import { searchLookError } from '../searchLook.js';
 import { wallpapersError, wallpaperCount, wallpaperVersion, hasResizer } from './wallpapers.js';
-import { healthError } from './health/config.js';
+import { healthError, healthSource, appHealth } from './health/config.js';
 
 let _config = null;
 
@@ -200,13 +200,14 @@ export async function getClientConfig({ authenticated = true, user = null } = {}
 		};
 	}
 
+	const visibleApps = getAppsConfig().filter((app) => canSeeApp(app, user));
 	return {
 		branding: getBranding(),
 		auth: { ...auth, password_change_url: config.auth?.password_change_url || null },
 		// How an app is checked stays on the server; /api/health has the answers.
-		apps: getAppsConfig()
-			.filter((app) => canSeeApp(app, user))
-			.map(({ health, ...app }) => app),
+		apps: visibleApps.map(({ health, ...app }) => app),
+		// Whether any of them has a check, so Configure offers the switch.
+		health: { enabled: visibleApps.some((app) => appHealth(app, healthSource(config))) },
 		customization: { enabled: config.customization?.enabled ?? false },
 		search: getSearchConfig(),
 		wallpapers: clientWallpapers(config),

@@ -274,8 +274,12 @@
 		healthNow = Date.now();
 	}
 
+	// Configure → Widgets → App status turns the dots off for this person.
+	const healthOn = $derived(siteConfig?.health?.enabled && $prefs.healthDots !== false);
+
 	$effect(() => {
-		if (!browser || !configApps.length) return;
+		if (!healthOn) health = {};
+		if (!browser || !configApps.length || !healthOn) return;
 		loadHealth();
 		// Right after a restart the server may not have answers yet.
 		const soon = setTimeout(loadHealth, 5000);
