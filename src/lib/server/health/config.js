@@ -7,7 +7,6 @@
 //     api_key: ${KENER_API_KEY}
 //     every: 60s
 //     page: https://status.example.com   # optional: the public status page
-//     show_source: false          # optional: no "Checked by …" line in the tip
 //
 //   apps:
 //     - id: jellyfin
@@ -111,7 +110,7 @@ export function healthError(config, apps = []) {
 	if (h !== undefined && h !== null) {
 		if (!isMapping(h)) return 'health must be a mapping';
 		for (const key of Object.keys(h)) {
-			if (!['source', 'url', 'api_key', 'every', 'page', 'show_source'].includes(key)) return `health.${key} isn't a setting; use source, url, api_key, every, page or show_source`;
+			if (!['source', 'url', 'api_key', 'every', 'page'].includes(key)) return `health.${key} isn't a setting; use source, url, api_key, every or page`;
 		}
 		const source = h.source ?? 'http';
 		if (!SOURCES.includes(source)) return `health.source must be kener, uptime_kuma, gatus, cachet or http, not ${show(h.source)}`;
@@ -121,7 +120,6 @@ export function healthError(config, apps = []) {
 		} else if (h.url !== undefined || h.api_key !== undefined) {
 			return 'health.url and health.api_key are for a status source; with source: http each app sets its own url';
 		}
-		if (h.show_source !== undefined && typeof h.show_source !== 'boolean') return 'health.show_source must be true or false';
 		if (h.page !== undefined && !isHttpUrl(h.page)) return `health.page must be the http(s) address of your status page, not ${show(h.page)}`;
 		const err = everyError(h.every, 'health.every');
 		if (err) return err;

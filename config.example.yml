@@ -64,7 +64,6 @@ customization:
 #   api_key: "${KENER_API_KEY}"         # Kener: Manage → API Keys. Uptime Kuma: Settings → API Keys. Gatus: user:password, if it asks. Cachet: only if its API is protected
 #   every: 60s                          # 30s or more
 #   page: "https://status.example.com"  # optional: your public status page; the tip links to it
-#   show_source: false                  # optional: no "Checked by …" line under the tip
 
 # ── Apps ────────────────────────────────────────────────────
 # Flat list of apps the operator wants to expose. Holm surfaces each app as

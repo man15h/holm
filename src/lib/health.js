@@ -20,18 +20,20 @@ export function duration(ms) {
 }
 
 /**
- * `{ tone, title, rest, by, link }` for a tile that isn't up, else null. tone
- * is down | slow | failed; `rest` is the muted part; `by` says who checked;
- * `link` is the status page for it, when the operator set one.
+ * `{ tone, state, title, rest, link }` for a tile that isn't up, else
+ * null. tone is down | slow | failed; `state` is the eyebrow ("Down for 12
+ * min"); `title` says why, or what, when the source doesn't say why; `rest`
+ * is the muted part; `link` is the status page for it, when the operator
+ * set one.
  */
 export function healthLine(app, h, now = Date.now()) {
 	const s = h && STATES[h.state];
 	if (!s) return null;
-	const rest = [];
-	if (s.is && h.since) rest.push(`for ${h.longer ? 'over ' : ''}${duration(now - h.since)}`);
-	if (h.detail) rest.push(h.detail);
-	if (h.until) rest.push(`until ${new Date(h.until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`);
-	return { tone: s.tone, title: s.is ? `${app.name} ${s.is}` : 'Status unknown', rest: rest.join(' · '), by: s.is ? `Checked by ${h.source}` : '', link: h.link || null };
+	const cap = (t) => t[0].toUpperCase() + t.slice(1);
+	const short = cap(s.short);
+	const state = s.is && h.since ? `${short} for ${h.longer ? 'over ' : ''}${duration(now - h.since)}` : short;
+	const rest = h.until ? `Until ${new Date(h.until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+	return { tone: s.tone, state, title: h.detail ? cap(h.detail) : (s.is ? `${app.name} ${s.is}` : 'No answer yet'), rest, link: h.link || null };
 }
 
 /** `Cloud, down`; just the name when it's up or unchecked. */

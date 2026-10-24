@@ -76,12 +76,9 @@
 >
 	{#if health}
 		<div class="tile-menu-health">
-			<i class="health-{health.tone}"></i>
-			<div class="min-w-0">
-				<div class="tile-menu-health-title">{health.title}</div>
-				{#if health.rest}<div class="tile-menu-host">{health.rest}</div>{/if}
-				{#if health.by}<div class="tile-menu-health-by">{health.by}</div>{/if}
-			</div>
+			<div class="health-brief-state health-{health.tone}"><i></i><span>{health.state}</span></div>
+			<div class="health-brief-title">{health.title}</div>
+			{#if health.rest}<div class="health-brief-rest">{health.rest}</div>{/if}
 		</div>
 	{/if}
 	<!-- Which app this menu belongs to -->

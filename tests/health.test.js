@@ -63,8 +63,6 @@ test('healthError: bad top-level settings', () => {
 	assert.match(healthError({ health: { ...KENER, colour: 'red' } }), /health.colour/);
 	assert.match(healthError({ health: { ...KENER, page: 'status' } }), /health.page/);
 	assert.equal(healthError({ health: { ...KENER, page: 'https://status.example.org/' } }), null);
-	assert.match(healthError({ health: { ...KENER, show_source: 'no' } }), /health.show_source/);
-	assert.equal(healthError({ health: { ...KENER, show_source: false } }), null);
 });
 
 test('healthError: bad per-app settings', () => {
@@ -281,14 +279,16 @@ test('healthFor: no match is a warning and no dot; no answer from Kener is a fai
 
 // --- the words ------------------------------------------------------------------
 
-test('healthLine and healthLabel: name the state and who checked', () => {
+test('healthLine and healthLabel: name the state and why', () => {
 	const now = 1_800_000_000_000;
 	const cloud = { name: 'Cloud' };
 	assert.equal(healthLine(cloud, { state: 'up', source: 'Kener' }), null);
-	assert.deepEqual(healthLine(cloud, { state: 'down', since: now - 12 * 60_000, source: 'Kener' }, now), { tone: 'down', title: 'Cloud is down', rest: 'for 12 min', by: 'Checked by Kener', link: null });
-	assert.equal(healthLine(cloud, { state: 'down', since: now - 7 * 3_600_000, longer: true, source: 'Holm' }, now).rest, 'for over 7 h');
+	assert.deepEqual(healthLine(cloud, { state: 'down', since: now - 12 * 60_000, source: 'Kener' }, now), { tone: 'down', state: 'Down for 12 min', title: 'Cloud is down', rest: '', link: null });
+	assert.equal(healthLine(cloud, { state: 'down', since: now - 7 * 3_600_000, longer: true, source: 'Holm' }, now).state, 'Down for over 7 h');
+	assert.equal(healthLine(cloud, { state: 'down', detail: 'answered 502 Bad Gateway', source: 'Gatus' }).title, 'Answered 502 Bad Gateway');
+	assert.equal(healthLine(cloud, { state: 'maintenance', source: 'Uptime Kuma' }).state, 'Under maintenance');
 	assert.equal(healthLine(cloud, { state: 'maintenance', source: 'Uptime Kuma' }).tone, 'slow');
-	assert.equal(healthLine(cloud, { state: 'failed', detail: "Kener didn't answer", source: 'Kener' }).title, 'Status unknown');
+	assert.deepEqual(healthLine(cloud, { state: 'failed', detail: "Kener didn't answer", source: 'Kener' }), { tone: 'failed', state: 'Status unknown', title: "Kener didn't answer", rest: '', link: null });
 	assert.equal(healthLabel(cloud, { state: 'down' }), 'Cloud, down');
 	assert.equal(healthLabel(cloud, { state: 'up' }), 'Cloud');
 	assert.equal(healthLabel(cloud, undefined), 'Cloud');

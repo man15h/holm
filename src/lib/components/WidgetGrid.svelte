@@ -276,9 +276,6 @@
 
 	// Configure → Widgets → App status turns the dots off for this person.
 	const healthOn = $derived(siteConfig?.health?.enabled && $prefs.healthDots !== false);
-	// health.show_source: false in config.yml drops "Checked by …" from the
-	// tip and menu, for everyone; "Open status page ↗" stays while `page` is set.
-	const healthBy = siteConfig?.health?.show_source !== false;
 
 	$effect(() => {
 		if (!healthOn) health = {};
@@ -297,11 +294,6 @@
 			document.removeEventListener('visibilitychange', onVisible);
 		};
 	});
-
-	function healthMenuLine(app) {
-		const line = healthLine(app, health[app.id], healthNow);
-		return line && !healthBy ? { ...line, by: '' } : line;
-	}
 
 	let healthTipTimer = null;
 	function showHealthTip(app, e) {
@@ -802,7 +794,7 @@
 		app={contextApp}
 		anchor={contextAnchor}
 		hasGuide={!!setupGuides[contextApp.name]}
-		health={healthMenuLine(contextApp)}
+		health={healthLine(contextApp, health[contextApp.id], healthNow)}
 		onopen={(app) => recordAppOpen(app.id)}
 		onguide={openGuide}
 		onclose={() => (contextApp = null)}
@@ -810,10 +802,12 @@
 {/if}
 
 {#snippet healthTipBody(line)}
-	<div><i class="health-{line.tone}"></i><b>{line.title}</b></div>
-	{#if line.rest}<div class="muted">{line.rest}</div>{/if}
-	{@const by = healthBy ? line.by : ''}
-	{#if by || line.link}<div class="by">{by}{#if line.link}{by ? ' · ' : ''}Open status page ↗{/if}</div>{/if}
+	<div class="health-brief-state health-{line.tone}">
+		<i></i><span>{line.state}</span>
+		{#if line.link}<span class="health-tip-check">Check →</span>{/if}
+	</div>
+	<div class="health-brief-title">{line.title}</div>
+	{#if line.rest}<div class="health-brief-rest">{line.rest}</div>{/if}
 {/snippet}
 {#if healthTip && !contextApp}
 	{#if healthTip.line.link}
@@ -1129,50 +1123,32 @@
 	:global(.health-tip) {
 		position: fixed;
 		z-index: 60;
-		padding: 8px 11px;
-		border-radius: 10px;
-		font-size: 12.5px;
-		font-weight: 500;
-		line-height: 1.35;
+		padding: 12px 14px;
+		border-radius: var(--radius-xl);
 		pointer-events: none;
 		text-decoration: none;
 		/* The surface is the tile menu's: glass-card menu-surface, so it
 		   follows Configure → Appearance → Glass. */
-		color: var(--color-content);
 	}
 	:global(.health-tip.linked) {
 		pointer-events: auto;
 		cursor: pointer;
 	}
-	:global(.health-tip.linked:hover .by) {
-		opacity: 0.8;
+	:global(.health-tip-check) {
+		margin-left: auto;
+		padding-left: 16px;
+		font-size: var(--text-caption);
+		text-transform: none;
+		letter-spacing: 0;
+		white-space: nowrap;
+		color: var(--color-content-muted);
+		transition: color 150ms;
 	}
-	:global(.health-tip b) {
-		font-weight: 600;
+	:global(.health-tip.linked:hover .health-tip-check) {
+		color: var(--color-content);
+		text-decoration: underline;
+		text-underline-offset: 3px;
 	}
-	/* The reason can be a sentence from the status page: it wraps under the title. */
-	:global(.health-tip .muted) {
-		opacity: 0.65;
-		font-weight: 400;
-		margin: 2px 0 0 15px;
-	}
-	:global(.health-tip .by) {
-		opacity: 0.5;
-		font-size: 11px;
-		font-weight: 400;
-		margin: 4px 0 0 15px;
-	}
-	:global(.health-tip i) {
-		display: inline-block;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		margin-right: 7px;
-		vertical-align: 1px;
-	}
-	:global(.health-tip i.health-down) { background: #ef4444; }
-	:global(.health-tip i.health-slow) { background: #f59e0b; }
-	:global(.health-tip i.health-failed) { box-shadow: inset 0 0 0 1.5px #a1a1aa; }
 	.app-tile-name {
 		font-size: 0.7rem;
 		text-align: center;
