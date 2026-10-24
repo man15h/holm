@@ -10,6 +10,7 @@ import { substituteEnvVars } from './envVars.js';
 import { searchOnFocusError } from '../searchOnFocus.js';
 import { searchLookError } from '../searchLook.js';
 import { wallpapersError, wallpaperCount, wallpaperVersion, hasResizer } from './wallpapers.js';
+import { healthError, healthSource, appHealth } from './health/config.js';
 
 let _config = null;
 
@@ -45,7 +46,7 @@ function loadConfig() {
 		throw new Error(`${configPath} must be a YAML mapping of settings`);
 	}
 	const config = substituteEnvVars(parsed);
-	const invalid = searchOnFocusError(config.search) || searchLookError(config.search) || wallpapersError(config.wallpapers);
+	const invalid = searchOnFocusError(config.search) || searchLookError(config.search) || wallpapersError(config.wallpapers) || healthError(config, flatApps(config.apps));
 	if (invalid) throw new Error(`Invalid setting in ${configPath}: ${invalid}`);
 	_config = config;
 	return _config;
@@ -83,10 +84,13 @@ export function getAuth() {
 // (apps: [{id, ...}]) and the legacy nested shape (apps: [{category, items}]) —
 // the legacy form is silently flattened so existing operator configs keep
 // loading. Each item is enriched in place with brand color metadata.
-export function getAppsConfig() {
-	const raw = getConfig().apps || [];
+function flatApps(raw = []) {
 	const isLegacy = Array.isArray(raw) && raw.length > 0 && Array.isArray(raw[0]?.items);
-	const items = isLegacy ? raw.flatMap((c) => (Array.isArray(c?.items) ? c.items : [])) : raw;
+	return isLegacy ? raw.flatMap((c) => (Array.isArray(c?.items) ? c.items : [])) : Array.isArray(raw) ? raw : [];
+}
+
+export function getAppsConfig() {
+	const items = flatApps(getConfig().apps || []);
 	for (const item of items) {
 		const brand = getBrandColor(item.icon, item.tile_color);
 		if (brand) {
@@ -196,10 +200,14 @@ export async function getClientConfig({ authenticated = true, user = null } = {}
 		};
 	}
 
+	const visibleApps = getAppsConfig().filter((app) => canSeeApp(app, user));
 	return {
 		branding: getBranding(),
 		auth: { ...auth, password_change_url: config.auth?.password_change_url || null },
-		apps: getAppsConfig().filter((app) => canSeeApp(app, user)),
+		// How an app is checked stays on the server; /api/health has the answers.
+		apps: visibleApps.map(({ health, ...app }) => app),
+		// Whether any of them has a check, so Configure offers the switch.
+		health: { enabled: visibleApps.some((app) => appHealth(app, healthSource(config))) },
 		customization: { enabled: config.customization?.enabled ?? false },
 		search: getSearchConfig(),
 		wallpapers: clientWallpapers(config),

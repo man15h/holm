@@ -22,6 +22,8 @@
 	} from '$lib/widgets/layout.js';
 	import { POPULAR_APPS } from '$lib/popularApps.js';
 	import { recordOpen } from '$lib/launcher/frecency.js';
+	import { healthLine, healthLabel } from '$lib/health.js';
+	import { portal } from '$lib/actions/portal.js';
 
 	let {
 		guideApp = $bindable(null),
@@ -256,6 +258,59 @@
 		surfaceUndo = null;
 		clearTimeout(surfaceUndoTimer);
 		if (snapshot) prefs.update((p) => ({ ...p, widgetLayout: snapshot.widgetLayout }));
+	}
+
+	// ── App health: the server checks, this only asks for the last answers ──
+	const HEALTH_POLL = 30_000;
+	let health = $state({});
+	let healthNow = $state(Date.now());
+	let healthTip = $state(null);
+
+	async function loadHealth() {
+		try {
+			const res = await fetch('/api/health');
+			if (res.ok) health = (await res.json()).apps || {};
+		} catch { /* keep the last answers */ }
+		healthNow = Date.now();
+	}
+
+	// Configure → Widgets → App status turns the dots off for this person.
+	const healthOn = $derived(siteConfig?.health?.enabled && $prefs.healthDots !== false);
+
+	$effect(() => {
+		if (!healthOn) health = {};
+		if (!browser || !configApps.length || !healthOn) return;
+		loadHealth();
+		// Right after a restart the server may not have answers yet.
+		const soon = setTimeout(loadHealth, 5000);
+		const timer = setInterval(() => {
+			if (document.visibilityState === 'visible') loadHealth();
+		}, HEALTH_POLL);
+		const onVisible = () => document.visibilityState === 'visible' && loadHealth();
+		document.addEventListener('visibilitychange', onVisible);
+		return () => {
+			clearTimeout(soon);
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', onVisible);
+		};
+	});
+
+	let healthTipTimer = null;
+	function showHealthTip(app, e) {
+		clearTimeout(healthTipTimer);
+		const line = healthLine(app, health[app.id], healthNow);
+		if (!line || editMode) return;
+		// Under the tile, so it never covers the name; as wide as the line
+		// needs, up to the window's edge, moving left when that's too close.
+		const r = e.currentTarget.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const x = vw - 8 - r.left < 360 ? Math.max(8, vw - 8 - 360) : r.left;
+		healthTip = { line, x, y: r.bottom + 6, max: vw - 8 - x };
+	}
+	// A moment's grace, so the pointer can reach a tip that links somewhere.
+	function hideHealthTip() {
+		clearTimeout(healthTipTimer);
+		healthTipTimer = setTimeout(() => (healthTip = null), healthTip?.line.link ? 250 : 0);
 	}
 
 	// ── Tile context menu (right-click / long-press) — ported from AppGrid ──
@@ -634,8 +689,11 @@
 						rel={openInNewTab ? 'noopener noreferrer' : undefined}
 						class="app-tile-link"
 						class:menu-open={contextApp?.id === app.id}
-						title={app.name}
-						aria-label={app.name}
+						class:health-faded={health[app.id]?.state === 'down'}
+						title={healthLine(app, health[app.id]) ? undefined : app.name}
+						aria-label={healthLabel(app, health[app.id])}
+						onmouseenter={(e) => showHealthTip(app, e)}
+						onmouseleave={hideHealthTip}
 						onclick={(e) => {
 							if (editMode || longPressFired) {
 								e.preventDefault();
@@ -659,12 +717,17 @@
 						ontouchend={editMode ? undefined : endLongPress}
 						ontouchmove={editMode ? undefined : cancelLongPress}
 					>
-						<div
-							class="app-tile-icon"
-							style={iconStyle === 'colored' ? getBrandBgStyle(app.icon) : ''}
-						>
-							<AppIcon icon={app.icon} name={app.name} size="w-7 h-7" {iconStyle} />
-						</div>
+						<span class="app-tile-icon-slot">
+							<div
+								class="app-tile-icon"
+								style={iconStyle === 'colored' ? getBrandBgStyle(app.icon) : ''}
+							>
+								<AppIcon icon={app.icon} name={app.name} size="w-7 h-7" {iconStyle} />
+							</div>
+							{#if healthLine(app, health[app.id])}
+								<span class="health-dot health-{healthLine(app, health[app.id]).tone}" aria-hidden="true"></span>
+							{/if}
+						</span>
 						<span class="app-tile-name">{app.name}</span>
 					</a>
 					{#if editMode}
@@ -731,10 +794,39 @@
 		app={contextApp}
 		anchor={contextAnchor}
 		hasGuide={!!setupGuides[contextApp.name]}
+		health={healthLine(contextApp, health[contextApp.id], healthNow)}
 		onopen={(app) => recordAppOpen(app.id)}
 		onguide={openGuide}
 		onclose={() => (contextApp = null)}
 	/>
+{/if}
+
+{#snippet healthTipBody(line)}
+	<div class="health-brief-state health-{line.tone}">
+		<i></i><span>{line.state}</span>
+		{#if line.link}<span class="health-tip-check">Check →</span>{/if}
+	</div>
+	<div class="health-brief-title">{line.title}</div>
+	{#if line.rest}<div class="health-brief-rest">{line.rest}</div>{/if}
+{/snippet}
+{#if healthTip && !contextApp}
+	{#if healthTip.line.link}
+		<a
+			use:portal
+			class="health-tip linked glass-card menu-surface"
+			href={healthTip.line.link}
+			target="_blank"
+			rel="noopener noreferrer"
+			style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;"
+			onmouseenter={() => clearTimeout(healthTipTimer)}
+			onmouseleave={hideHealthTip}
+			onclick={() => (healthTip = null)}
+		>{@render healthTipBody(healthTip.line)}</a>
+	{:else}
+		<div use:portal class="health-tip glass-card menu-surface" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;">
+			{@render healthTipBody(healthTip.line)}
+		</div>
+	{/if}
 {/if}
 
 <!-- Setup Guide Modal (portal to body) -->
@@ -994,6 +1086,68 @@
 		overflow: hidden;
 		background: rgba(255, 255, 255, 0.06);
 		flex-shrink: 0;
+	}
+	/* Health: the dot sits outside the icon's clip and outside the fade. */
+	.app-tile-icon-slot {
+		position: relative;
+		display: flex;
+		flex-shrink: 0;
+	}
+	.app-tile-link.health-faded .app-tile-icon {
+		opacity: 0.4;
+		filter: grayscale(0.7);
+	}
+	.health-dot {
+		position: absolute;
+		top: -3px;
+		right: -3px;
+		width: 11px;
+		height: 11px;
+		border-radius: 50%;
+		box-shadow: 0 0 0 2px var(--health-ring, rgba(20, 20, 22, 0.85));
+		pointer-events: none;
+	}
+	:global(body.theme-light) .health-dot {
+		--health-ring: #fff;
+	}
+	.health-dot.health-down {
+		background: #ef4444;
+	}
+	.health-dot.health-slow {
+		background: #f59e0b;
+	}
+	.health-dot.health-failed {
+		background: transparent;
+		box-shadow: inset 0 0 0 2px #a1a1aa, 0 0 0 2px var(--health-ring, rgba(20, 20, 22, 0.85));
+	}
+	:global(.health-tip) {
+		position: fixed;
+		z-index: 60;
+		padding: 12px 14px;
+		border-radius: var(--radius-xl);
+		pointer-events: none;
+		text-decoration: none;
+		/* The surface is the tile menu's: glass-card menu-surface, so it
+		   follows Configure → Appearance → Glass. */
+	}
+	:global(.health-tip.linked) {
+		pointer-events: auto;
+		cursor: pointer;
+	}
+	:global(.health-tip-check) {
+		margin-left: auto;
+		padding-left: 16px;
+		font-size: var(--text-caption);
+		text-transform: none;
+		letter-spacing: 0;
+		white-space: nowrap;
+		color: var(--color-content-muted);
+		transition: color 150ms;
+	}
+	:global(.health-tip.linked:hover .health-tip-check) {
+		color: var(--color-content);
+		text-decoration: underline;
+		text-underline-offset: 3px;
 	}
 	.app-tile-name {
 		font-size: 0.7rem;

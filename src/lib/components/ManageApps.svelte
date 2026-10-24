@@ -52,6 +52,7 @@
 		openInNewTab = $prefs.openInNewTab ?? true;
 		wallpaperPage = wallpaperId ? Math.floor((wallpaperId - 1) / WALLPAPERS_PER_PAGE) : 0;
 		enabledWidgets = new Set($prefs.enabledWidgets || ['weather', 'search']);
+		healthDots = $prefs.healthDots !== false;
 	}
 	$effect(() => {
 		if (open && !prevOpen) {
@@ -114,6 +115,14 @@
 	function toggleOpenInNewTab() {
 		openInNewTab = !openInNewTab;
 		prefs.update(p => ({ ...p, openInNewTab }));
+	}
+
+	// App status is on unless switched off, so it has its own pref rather than
+	// a place in enabledWidgets (which lists what's on).
+	let healthDots = $state($prefs.healthDots !== false);
+	function toggleHealthDots() {
+		healthDots = !healthDots;
+		prefs.update(p => ({ ...p, healthDots }));
 	}
 
 	function toggleWidget(id) {
@@ -416,7 +425,8 @@
 							{ key: 'searchOnFocus', label: 'On focus', options: SEARCH_ON_FOCUS, fallback: searchOnFocus(undefined, siteConfig?.search?.on_focus) },
 							{ key: 'searchTransparency', label: 'Transparency', options: SEARCH_TRANSPARENCY, fallback: searchTransparency(undefined, siteConfig?.search?.transparency) },
 							{ key: 'searchHints', label: 'Hints', options: SEARCH_HINTS, fallback: searchHints(undefined, siteConfig?.search?.hints) }
-						] }
+						] },
+					...(siteConfig?.health?.enabled ? [{ id: 'health', name: 'App status', desc: 'A dot on tiles whose app is down or slow', icon: 'M3 12h4l3-8 4 16 3-8h4', on: healthDots, toggle: toggleHealthDots }] : [])
 				]}
 				{#snippet toggle(on)}
 					<div class="w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 {on ? 'bg-surface-toggle-on' : 'bg-surface-toggle-off'}">
@@ -434,7 +444,7 @@
 				     setting it has as a row of the same height below. -->
 				<div class="flex flex-col gap-2">
 					{#each widgets as widget}
-						{@const on = widget.fixed || enabledWidgets.has(widget.id)}
+						{@const on = widget.fixed || (widget.toggle ? widget.on : enabledWidgets.has(widget.id))}
 						{#snippet icon()}
 							<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={widget.icon} /></svg>
 						{/snippet}
@@ -442,7 +452,7 @@
 							{#if widget.fixed}
 								<div class="widget-head">{@render cardHead(icon, widget.name, widget.desc)}</div>
 							{:else}
-								<button class="widget-head" role="switch" aria-checked={on} onclick={() => toggleWidget(widget.id)}>
+								<button class="widget-head" role="switch" aria-checked={on} onclick={() => (widget.toggle ? widget.toggle() : toggleWidget(widget.id))}>
 									{@render cardHead(icon, widget.name, widget.desc)}
 									{@render toggle(on)}
 								</button>

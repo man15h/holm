@@ -3,8 +3,10 @@
 	import { portal } from '$lib/actions/portal.js';
 	import AppIcon from '$lib/components/AppIcon.svelte';
 
-	// A tile's right-click / long-press menu, placed beside its tile.
-	let { app, anchor, hasGuide = false, onopen, onguide, onclose } = $props();
+	// A tile's right-click / long-press menu, placed beside its tile. `health`
+	// is the tile's health line (lib/health.js), shown on top: on a phone
+	// there's no hover to read it from.
+	let { app, anchor, hasGuide = false, health = null, onopen, onguide, onclose } = $props();
 
 	let menuEl = $state(null);
 	const host = $derived.by(() => { try { return new URL(app.url).host; } catch { return ''; } });
@@ -72,6 +74,13 @@
 	role="menu"
 	aria-label="{app.name} options"
 >
+	{#if health}
+		<div class="tile-menu-health">
+			<div class="health-brief-state health-{health.tone}"><i></i><span>{health.state}</span></div>
+			<div class="health-brief-title">{health.title}</div>
+			{#if health.rest}<div class="health-brief-rest">{health.rest}</div>{/if}
+		</div>
+	{/if}
 	<!-- Which app this menu belongs to -->
 	<div class="tile-menu-head">
 		<AppIcon icon={app.icon} name={app.name} size="w-[22px] h-[22px]" wrapSize="w-9 h-9" iconStyle="colored" wrap />
@@ -81,6 +90,12 @@
 		</div>
 	</div>
 	<div class="py-1.5">
+		{#if health?.link}
+			<a href={health.link} target="_blank" rel="noopener noreferrer" class="tile-menu-item" role="menuitem" onclick={() => onclose()}>
+				<svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+				Status page
+			</a>
+		{/if}
 		<a href={app.url} target="_blank" rel="noopener noreferrer" class="tile-menu-item" role="menuitem" onclick={() => { onopen(app); onclose(); }}>
 			<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
 			Open {app.name}

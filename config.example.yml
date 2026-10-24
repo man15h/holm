@@ -51,6 +51,20 @@ database:
 customization:
   enabled: true
 
+# ── Health ──────────────────────────────────────────────────
+# A dot on an app's tile when it's down (red, and the tile fades), slow or
+# under maintenance (amber), or can't be checked (grey ring). Up shows nothing.
+# Only apps with a `health:` line get one (see the per-app field below).
+# Holm's server does the checking, once per `every` for everyone, and people
+# only get it for apps they can see. The key never leaves the server.
+# Without this block, `health: true` has Holm check the app's own URL.
+# health:
+#   source: kener                       # kener | uptime_kuma | gatus | cachet | http (Holm checks)
+#   url: "https://status.example.com"
+#   api_key: "${KENER_API_KEY}"         # Kener: Manage → API Keys. Uptime Kuma: Settings → API Keys. Gatus: user:password, if it asks. Cachet: only if its API is protected
+#   every: 60s                          # 30s or more
+#   page: "https://status.example.com"  # optional: your public status page; the tip links to it
+
 # ── Apps ────────────────────────────────────────────────────
 # Flat list of apps the operator wants to expose. Holm surfaces each app as
 # its own widget tile — there are no operator-defined categories anymore. Users
@@ -78,6 +92,11 @@ customization:
 #                   (the Getting started card, until the user ticks "Don't show again"),
 #                   or menu (the tile's right-click menu).
 #   setup_guide     Optional Getting started card (browser or mobile app), from the tile's right-click menu.
+#   health          Optional status dot (see Health above). true: the monitor whose URL is on
+#                   the app's host, else whose name is the app's name or id. A monitor name
+#                   ("nextcloud"): that one. Or { url, every, enabled }: Holm checks the URL
+#                   itself, every 30s or more; enabled: false turns it off and keeps the rest.
+#                   An app whose monitor can't be found is named in the log and gets no dot.
 apps:
   - id: photos
     name: "Photos"
@@ -86,6 +105,7 @@ apps:
     self_hosted: true
     default_visible: true
     on_click: getting_started
+    health: true
     tags: ["media", "selfhosted"]
     app_store:
       ios: "https://apps.apple.com/app/immich/id1613945652"
@@ -108,6 +128,7 @@ apps:
     icon: "di:nextcloud"
     self_hosted: true
     default_visible: true
+    # health: nextcloud                 # a monitor in health.source, by its tag or name
     tags: ["productivity", "selfhosted"]
     app_store:
       ios: "https://apps.apple.com/app/nextcloud/id1125420102"
@@ -119,6 +140,9 @@ apps:
     icon: "di:bitwarden"
     self_hosted: true
     default_visible: true
+    health:
+      url: "http://vaultwarden:80/alive"   # Holm asks this itself; 2xx, 3xx, 401, 403, 429 are up
+      every: 5m
     tags: ["security", "selfhosted"]
     app_store:
       ios: "https://apps.apple.com/app/bitwarden/id1137397744"
