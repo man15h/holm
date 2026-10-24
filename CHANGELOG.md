@@ -8,7 +8,7 @@ twelve words, ending with a link to its PR.
 
 ## Unreleased
 
-- **New:** Tiles show a dot when their app is down or slow. ([#PR](https://github.com/OWNER/holm/pull/PR))
+- **New:** Tiles show a dot when their app is down or slow. ([#114](https://github.com/man15h/holm/pull/114))
 
 ## 0.10.1 — 2026-10-22
 
