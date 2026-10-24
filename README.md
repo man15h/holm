@@ -124,7 +124,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Papra | Documents, by name and content |
 | Thingport | 3D models; under `!tp`, collections and tags too |
 
-**App health** puts a dot on a tile when its app is down or slow. It reads Kener, Uptime Kuma, Gatus or Cachet, or checks a plain URL; see [App health](docs/configuration.md#app-health).
+**App health** is a health check built into each app tile, supporting Kener, Uptime Kuma, Gatus and Cachet, or a plain URL check; see [App health](docs/configuration.md#app-health).
 
 Adding an integration is one adapter file and one import line. [docs/integrations.md](docs/integrations.md) covers enabling, connecting, the security model and writing a new adapter.
 
