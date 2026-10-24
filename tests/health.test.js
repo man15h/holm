@@ -177,6 +177,19 @@ test('healthFor: one check per interval, however many ask', async () => {
 	assert.equal(fetch.calls.filter((u) => u.includes('/data')).length, 2);
 });
 
+test('healthFor: a Kener monitor that is down carries its description', async () => {
+	const now = 1_800_000_000_000;
+	const list = { monitors: [{ ...kenerList.monitors[0], description: 'Proxy has no route for it' }] };
+	const fetch = fakeFetch({ '/data': { data: [{ timestamp: now / 1000 - 60, status: 'DOWN' }] }, '/api/v4/monitors': list });
+	const source = healthSource({ health: KENER });
+	const apps = [app('cloud', { health: true })];
+	healthFor(apps, source, { fetch, now });
+	await healthSettled();
+	healthFor(apps, source, { fetch, now });
+	await healthSettled();
+	assert.equal(healthFor(apps, source, { fetch, now }).cloud.detail, 'Proxy has no route for it');
+});
+
 test('healthFor: no match is a warning and no dot; no answer from Kener is a failed check', async () => {
 	const warnings = [];
 	console.warn = (m) => warnings.push(m);

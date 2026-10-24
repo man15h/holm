@@ -169,12 +169,12 @@ apps:
 
 - **`true` finds the monitor** whose checked URL is on the app's host, then one whose name or tag is the app's name or id (ignoring case and punctuation). An app whose monitor isn't found is named in the log at startup and gets no dot.
 - **The mapping** takes `monitor` or `url`, not both: Holm refuses to start and names the app. With neither, it matches as `true` does.
-- **`url`** is checked by Holm's server: 2xx, redirects, 401, 403 and 429 are up; any other answer is down, with its status as the reason (`answered 404 Not Found`); no answer in 10s is down; over 3s is slow. Use it for apps your status page doesn't watch, or to see why one is down: Kener's API says a monitor is down but not why.
+- **`url`** is checked by Holm's server: 2xx, redirects, 401, 403 and 429 are up; any other answer is down, with its status as the reason (`answered 404 Not Found`); no answer in 10s is down; over 3s is slow. Use it for apps your status page doesn't watch.
 - **Without a `health:` block**, `health: true` checks the app's own URL as `url` would.
 
 Holm's server does every check and keeps the answer, so one check per `every` serves everyone, however many are looking. People only get health for apps they can see (`groups:`), from `/api/health`, which needs a session. The URL and key stay on the server.
 
-**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check.
+**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check. Kener's API doesn't say why a monitor is down, so when one isn't up its tip shows the monitor's **description**: write the reason there ("Moving to a new disk, back tonight"). A changed description shows within 10 minutes.
 
 **Uptime Kuma**: create a key under Settings → API Keys; Holm reads `/metrics` with it once per `every` for all apps. Pending (a failed check being retried) shows amber.
 

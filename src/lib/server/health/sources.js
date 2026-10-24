@@ -54,7 +54,7 @@ export async function kenerMonitors(fetch, source) {
 	if (!Array.isArray(data?.monitors)) throw new Error('unexpected reply from Kener');
 	return data.monitors
 		.filter((m) => m.status === 'ACTIVE')
-		.map((m) => ({ key: m.tag, name: m.name, url: m.type_data?.url || m.external_url || '' }));
+		.map((m) => ({ key: m.tag, name: m.name, url: m.type_data?.url || m.external_url || '', description: m.description?.trim() || '' }));
 }
 
 export async function kenerStatus(fetch, source, key, now = Date.now()) {
