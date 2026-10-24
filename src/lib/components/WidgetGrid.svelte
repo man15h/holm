@@ -810,7 +810,7 @@
 	{#if healthTip.line.link}
 		<a
 			use:portal
-			class="health-tip linked"
+			class="health-tip linked glass-card menu-surface"
 			href={healthTip.line.link}
 			target="_blank"
 			rel="noopener noreferrer"
@@ -820,7 +820,7 @@
 			onclick={() => (healthTip = null)}
 		>{@render healthTipBody(healthTip.line)}</a>
 	{:else}
-		<div use:portal class="health-tip" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;">
+		<div use:portal class="health-tip glass-card menu-surface" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;">
 			{@render healthTipBody(healthTip.line)}
 		</div>
 	{/if}
@@ -1127,11 +1127,9 @@
 		line-height: 1.35;
 		pointer-events: none;
 		text-decoration: none;
-		background: rgba(24, 24, 27, 0.92);
-		color: #fafafa;
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-		backdrop-filter: blur(16px);
+		/* The surface is the tile menu's: glass-card menu-surface, so it
+		   follows Configure → Appearance → Glass. */
+		color: var(--color-content);
 	}
 	:global(.health-tip.linked) {
 		pointer-events: auto;
@@ -1139,11 +1137,6 @@
 	}
 	:global(.health-tip.linked:hover .by) {
 		opacity: 0.8;
-	}
-	:global(body.theme-light .health-tip) {
-		background: rgba(255, 255, 255, 0.95);
-		color: #18181b;
-		border-color: rgba(0, 0, 0, 0.08);
 	}
 	:global(.health-tip b) {
 		font-weight: 600;
