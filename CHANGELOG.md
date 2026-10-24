@@ -10,7 +10,7 @@ twelve words, ending with a link to its PR.
 
 - **New:** Health check widgets built into apps, supporting Kener, Uptime Kuma, Gatus and Cachet. ([#114](https://github.com/man15h/holm/pull/114))
 - **New:** Search Thingport 3D models with `!tp`, including collections and tags. ([#107](https://github.com/man15h/holm/pull/107))
-- **New:** Under `!b`, pick a Karakeep tag or list to search inside it. ([#108](https://github.com/man15h/holm/pull/108))
+- **New:** Under `!b`, pick a Karakeep tag or list to search deep inside it. ([#108](https://github.com/man15h/holm/pull/108))
 - **Fixed:** The ⌘K actions panel fits short result lists and keeps search focused. ([#112](https://github.com/man15h/holm/pull/112))
 
 ## 0.10.1 — 2026-10-22
