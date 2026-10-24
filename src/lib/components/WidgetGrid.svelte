@@ -804,7 +804,6 @@
 {#snippet healthTipBody(line)}
 	<div><i class="health-{line.tone}"></i><b>{line.title}</b></div>
 	{#if line.rest}<div class="muted">{line.rest}</div>{/if}
-	{#if line.note}<div class="note">{line.note}</div>{/if}
 	{#if line.by || line.link}<div class="by">{line.by}{#if line.link}{line.by ? ' · ' : ''}Open status page ↗{/if}</div>{/if}
 {/snippet}
 {#if healthTip && !contextApp}
@@ -1154,21 +1153,6 @@
 		opacity: 0.65;
 		font-weight: 400;
 		margin: 2px 0 0 15px;
-	}
-	/* The status page's own words: a paragraph, so it takes the width the
-	   lines above it set (at least 320px) instead of widening the tip. */
-	:global(.health-tip:has(.note)) {
-		min-width: min(320px, 100%);
-	}
-	:global(.health-tip .note) {
-		width: 0;
-		min-width: calc(100% - 15px);
-		font-size: 11.5px;
-		line-height: 1.45;
-		opacity: 0.72;
-		font-weight: 400;
-		margin: 6px 0 0 15px;
-		white-space: pre-line;
 	}
 	:global(.health-tip .by) {
 		opacity: 0.5;
