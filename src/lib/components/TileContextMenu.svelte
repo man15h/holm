@@ -80,6 +80,7 @@
 			<div class="min-w-0">
 				<div class="tile-menu-health-title">{health.title}</div>
 				{#if health.rest}<div class="tile-menu-host">{health.rest}</div>{/if}
+				{#if health.note}<div class="tile-menu-health-note">{health.note}</div>{/if}
 				{#if health.by}<div class="tile-menu-health-by">{health.by}</div>{/if}
 			</div>
 		</div>

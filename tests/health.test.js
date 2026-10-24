@@ -200,7 +200,7 @@ test('healthFor: an ongoing Kener maintenance shows as maintenance, with its tit
 	const t = now / 1000;
 	const fetch = fakeFetch({
 		'/maintenances/7/events': { events: [{ id: 1, status: 'ONGOING', start_date_time: t - 60, end_date_time: t + 3600 }] },
-		'/maintenances?': { maintenances: [{ id: 7, title: 'New disk', status: 'ACTIVE', monitors: [{ monitor_tag: 'cloud', impact: 'MAINTENANCE' }] }] },
+		'/maintenances?': { maintenances: [{ id: 7, title: 'New disk', description: 'Back by lunch.', status: 'ACTIVE', monitors: [{ monitor_tag: 'cloud', impact: 'MAINTENANCE' }] }] },
 		'/data': { data: [{ timestamp: t - 60, status: 'DOWN' }] },
 		'/api/v4/monitors': kenerList
 	});
@@ -210,20 +210,21 @@ test('healthFor: an ongoing Kener maintenance shows as maintenance, with its tit
 		healthFor(apps, source, { fetch, now });
 		await healthSettled();
 	}
-	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'maintenance', detail: 'New disk', until: (t + 3600) * 1000, source: 'Kener' });
+	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'maintenance', detail: 'New disk', note: 'Back by lunch.', until: (t + 3600) * 1000, source: 'Kener' });
 });
 
-test('healthFor: an open Kener incident says why, until it is resolved', async () => {
+test('healthFor: an open Kener incident says why, with its latest update, until it is resolved', async () => {
 	const now = 1_800_000_000_000;
 	const incidents = { incidents: [{ id: 1, title: 'Outside access paused', state: 'IDENTIFIED', monitors: [{ monitor_tag: 'cloud', impact: 'DEGRADED' }] }, { id: 2, title: 'Old', state: 'RESOLVED', monitors: [{ monitor_tag: 'cloud' }] }] };
-	const fetch = fakeFetch({ '/incidents': incidents, '/data': { data: [{ timestamp: now / 1000 - 60, status: 'DOWN' }] }, '/api/v4/monitors': kenerList });
+	const comments = { comments: [{ id: 2, comment: 'Patched image due Friday.', timestamp: 20 }, { id: 1, comment: 'Looking into it.', timestamp: 10 }] };
+	const fetch = fakeFetch({ '/incidents/1/comments': comments, '/incidents': incidents, '/data': { data: [{ timestamp: now / 1000 - 60, status: 'DOWN' }] }, '/api/v4/monitors': kenerList });
 	const source = healthSource({ health: KENER });
 	const apps = [app('cloud', { health: true })];
 	for (let i = 0; i < 3; i++) {
 		healthFor(apps, source, { fetch, now });
 		await healthSettled();
 	}
-	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'slow', detail: 'Outside access paused', source: 'Kener' });
+	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'slow', detail: 'Outside access paused', note: 'Patched image due Friday.', source: 'Kener' });
 });
 
 test('healthFor: no match is a warning and no dot; no answer from Kener is a failed check', async () => {
@@ -252,7 +253,7 @@ test('healthLine and healthLabel: name the state and who checked', () => {
 	const now = 1_800_000_000_000;
 	const cloud = { name: 'Cloud' };
 	assert.equal(healthLine(cloud, { state: 'up', source: 'Kener' }), null);
-	assert.deepEqual(healthLine(cloud, { state: 'down', since: now - 12 * 60_000, source: 'Kener' }, now), { tone: 'down', title: 'Cloud is down', rest: 'for 12 min', by: 'Checked by Kener', link: null });
+	assert.deepEqual(healthLine(cloud, { state: 'down', since: now - 12 * 60_000, source: 'Kener' }, now), { tone: 'down', title: 'Cloud is down', rest: 'for 12 min', note: '', by: 'Checked by Kener', link: null });
 	assert.equal(healthLine(cloud, { state: 'down', since: now - 7 * 3_600_000, longer: true, source: 'Holm' }, now).rest, 'for over 7 h');
 	assert.equal(healthLine(cloud, { state: 'maintenance', source: 'Uptime Kuma' }).tone, 'slow');
 	assert.equal(healthLine(cloud, { state: 'failed', detail: "Kener didn't answer", source: 'Kener' }).title, 'Status unknown');

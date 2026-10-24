@@ -52,7 +52,7 @@ function monitorFor(app, plan, list, source) {
 }
 
 /**
- * `{ [app id]: { state, since?, detail?, source } }` for those of `apps` with a
+ * `{ [app id]: { state, since?, detail?, note?, source } }` for those of `apps` with a
  * check and an answer so far. `source` names who checked: Kener, Uptime Kuma
  * or Holm.
  */
@@ -79,7 +79,7 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 				// and says why.
 				const notices = cached('kener:notices', source.every, () => kenerNotices(fetch, source, now), now);
 				const on = monitor && !notices?.error && notices?.[monitor.key];
-				if (on) value = { state: on.state, detail: on.title, ...(on.until && { until: on.until }) };
+				if (on) value = { state: on.state, detail: on.title, ...(on.note && { note: on.note }), ...(on.until && { until: on.until }) };
 				// Otherwise Kener's API says a monitor is down but not why; the
 				// monitor's description is where the operator can say.
 				else if (monitor?.description && value?.state && value.state !== 'up' && !value.detail) value = { ...value, detail: monitor.description };

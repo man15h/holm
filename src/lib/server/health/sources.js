@@ -76,10 +76,11 @@ export async function kenerStatus(fetch, source, key, now = Date.now()) {
 const IMPACT = { DOWN: 'down', DEGRADED: 'slow', MAINTENANCE: 'maintenance' };
 
 /**
- * What Kener says is happening now, by monitor tag: `{ state, title, until? }`
- * from a maintenance under way, else from an incident not yet resolved.
- * One read of incidents and of active maintenances, then one of each
- * maintenance's events.
+ * What Kener says is happening now, by monitor tag: `{ state, title, note?,
+ * until? }` from a maintenance under way, else from an incident not yet
+ * resolved. `note` is the maintenance's description or the incident's latest
+ * update. One read of incidents and of active maintenances, then one of each
+ * open incident's updates and each maintenance's events.
  */
 export async function kenerNotices(fetch, source, now = Date.now()) {
 	const auth = { authorization: `Bearer ${source.apiKey}` };
@@ -87,9 +88,13 @@ export async function kenerNotices(fetch, source, now = Date.now()) {
 	const incidents = (await (await get(fetch, `${source.url}/api/v4/incidents`, auth)).json())?.incidents;
 	for (const i of Array.isArray(incidents) ? incidents : []) {
 		if (i.state === 'RESOLVED' || (i.end_date_time && i.end_date_time * 1000 <= now)) continue;
-		for (const { monitor_tag, impact = 'DOWN' } of i.monitors || []) {
+		if (!i.monitors?.length) continue;
+		const updates = (await (await get(fetch, `${source.url}/api/v4/incidents/${i.id}/comments`, auth)).json())?.comments || [];
+		const latest = updates.reduce((a, c) => (!a || c.timestamp > a.timestamp ? c : a), null);
+		const note = latest?.comment?.trim();
+		for (const { monitor_tag, impact = 'DOWN' } of i.monitors) {
 			const state = IMPACT[impact];
-			if (state) out[monitor_tag] = { state, title: i.title };
+			if (state) out[monitor_tag] = { state, title: i.title, ...(note && { note }) };
 		}
 	}
 	const list = (await (await get(fetch, `${source.url}/api/v4/maintenances?status=ACTIVE`, auth)).json())?.maintenances;
@@ -100,7 +105,8 @@ export async function kenerNotices(fetch, source, now = Date.now()) {
 		if (!live) continue;
 		for (const { monitor_tag, impact } of m.monitors) {
 			const state = IMPACT[impact];
-			if (state) out[monitor_tag] = { state, title: m.title, until: live.end_date_time * 1000 };
+			const note = m.description?.trim();
+			if (state) out[monitor_tag] = { state, title: m.title, ...(note && { note }), until: live.end_date_time * 1000 };
 		}
 	}
 	return out;
