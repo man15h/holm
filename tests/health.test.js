@@ -170,7 +170,7 @@ test('healthFor: one check per interval, however many ask', async () => {
 	await healthSettled();
 	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'down', since: now - 60_000, longer: true, source: 'Kener' });
 	assert.equal(fetch.calls.filter((u) => u.includes('/data')).length, 1);
-	assert.equal(fetch.calls.filter((u) => u.endsWith('?status=ACTIVE')).length, 1);
+	assert.equal(fetch.calls.filter((u) => u.endsWith('/monitors?status=ACTIVE')).length, 1);
 	// A minute on, the next check is due.
 	healthFor(apps, source, { fetch, now: now + 60_000 });
 	await healthSettled();
@@ -188,6 +188,24 @@ test('healthFor: a Kener monitor that is down carries its description', async ()
 	healthFor(apps, source, { fetch, now });
 	await healthSettled();
 	assert.equal(healthFor(apps, source, { fetch, now }).cloud.detail, 'Proxy has no route for it');
+});
+
+test('healthFor: an ongoing Kener maintenance shows as maintenance, with its title', async () => {
+	const now = 1_800_000_000_000;
+	const t = now / 1000;
+	const fetch = fakeFetch({
+		'/maintenances/7/events': { events: [{ id: 1, status: 'ONGOING', start_date_time: t - 60, end_date_time: t + 3600 }] },
+		'/maintenances?': { maintenances: [{ id: 7, title: 'New disk', status: 'ACTIVE', monitors: [{ monitor_tag: 'cloud', impact: 'MAINTENANCE' }] }] },
+		'/data': { data: [{ timestamp: t - 60, status: 'DOWN' }] },
+		'/api/v4/monitors': kenerList
+	});
+	const source = healthSource({ health: KENER });
+	const apps = [app('cloud', { health: true })];
+	for (let i = 0; i < 3; i++) {
+		healthFor(apps, source, { fetch, now });
+		await healthSettled();
+	}
+	assert.deepEqual(healthFor(apps, source, { fetch, now }).cloud, { state: 'maintenance', detail: 'New disk', until: (t + 3600) * 1000, source: 'Kener' });
 });
 
 test('healthFor: no match is a warning and no dot; no answer from Kener is a failed check', async () => {

@@ -29,6 +29,7 @@ export function healthLine(app, h, now = Date.now()) {
 	const rest = [];
 	if (s.is && h.since) rest.push(`for ${h.longer ? 'over ' : ''}${duration(now - h.since)}`);
 	if (h.detail) rest.push(h.detail);
+	if (h.until) rest.push(`until ${new Date(h.until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`);
 	if (s.is) rest.push(`checked by ${h.source}`);
 	return { tone: s.tone, title: s.is ? `${app.name} ${s.is}` : 'Status unknown', rest: rest.join(' · ') };
 }

@@ -73,6 +73,29 @@ export async function kenerStatus(fetch, source, key, now = Date.now()) {
 	return { state, since: points[i].timestamp * 1000, ...(i === 0 && { longer: true }) };
 }
 
+const IMPACT = { DOWN: 'down', DEGRADED: 'slow', MAINTENANCE: 'maintenance' };
+
+/**
+ * Kener maintenances happening now: `{ [monitor tag]: { state, title, until } }`.
+ * One read of the active maintenances, then one of each one's events.
+ */
+export async function kenerMaintenances(fetch, source, now = Date.now()) {
+	const auth = { authorization: `Bearer ${source.apiKey}` };
+	const list = (await (await get(fetch, `${source.url}/api/v4/maintenances?status=ACTIVE`, auth)).json())?.maintenances;
+	const out = {};
+	for (const m of Array.isArray(list) ? list : []) {
+		if (m.status !== 'ACTIVE' || !m.monitors?.length) continue;
+		const events = (await (await get(fetch, `${source.url}/api/v4/maintenances/${m.id}/events`, auth)).json())?.events || [];
+		const live = events.find((e) => e.status === 'ONGOING' || (e.status !== 'CANCELLED' && e.status !== 'COMPLETED' && e.start_date_time * 1000 <= now && now < e.end_date_time * 1000));
+		if (!live) continue;
+		for (const { monitor_tag, impact } of m.monitors) {
+			const state = IMPACT[impact];
+			if (state) out[monitor_tag] = { state, title: m.title, until: live.end_date_time * 1000 };
+		}
+	}
+	return out;
+}
+
 // --- Uptime Kuma (/metrics, Prometheus text) ---------------------------------
 
 const KUMA_STATES = { 0: 'down', 1: 'up', 2: 'slow', 3: 'maintenance' };

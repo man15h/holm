@@ -789,8 +789,8 @@
 
 {#if healthTip && !contextApp}
 	<div use:portal class="health-tip" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px;">
-		<i class="health-{healthTip.line.tone}"></i><b>{healthTip.line.title}</b>
-		{#if healthTip.line.rest}<span class="muted"> · {healthTip.line.rest}</span>{/if}
+		<div><i class="health-{healthTip.line.tone}"></i><b>{healthTip.line.title}</b></div>
+		{#if healthTip.line.rest}<div class="muted">{healthTip.line.rest}</div>{/if}
 	</div>
 {/if}
 
@@ -1093,7 +1093,7 @@
 		font-size: 12.5px;
 		font-weight: 500;
 		line-height: 1.35;
-		white-space: nowrap;
+		max-width: 320px;
 		pointer-events: none;
 		background: rgba(24, 24, 27, 0.92);
 		color: #fafafa;
@@ -1109,9 +1109,11 @@
 	:global(.health-tip b) {
 		font-weight: 600;
 	}
+	/* The reason can be a sentence from the status page: it wraps under the title. */
 	:global(.health-tip .muted) {
 		opacity: 0.65;
 		font-weight: 400;
+		margin: 2px 0 0 15px;
 	}
 	:global(.health-tip i) {
 		display: inline-block;
