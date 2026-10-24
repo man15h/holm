@@ -5,7 +5,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { healthError, healthSource, appHealth, parseEvery } from '../src/lib/server/health/config.js';
-import { matchMonitor, namedMonitor, kenerStatus, kumaMonitors, httpStatus } from '../src/lib/server/health/sources.js';
+import { matchMonitor, namedMonitor, kenerStatus, kumaMonitors, gatusMonitors, cachetMonitors, httpStatus } from '../src/lib/server/health/sources.js';
 import { healthFor, healthSettled, resetHealth } from '../src/lib/server/health/index.js';
 import { healthLine, healthLabel } from '../src/lib/health.js';
 
@@ -71,7 +71,7 @@ test('healthError: bad per-app settings', () => {
 	assert.match(healthError({ health: KENER }, [app('a', { health: { enabled: 'yes' } })]), /enabled/);
 	assert.match(healthError({ health: KENER }, [app('a', { health: 42 })]), /must be true, false/);
 	// A monitor name needs a monitoring app to look it up in.
-	assert.match(healthError({}, [app('a', { health: 'nextcloud' })]), /isn't kener or uptime_kuma/);
+	assert.match(healthError({}, [app('a', { health: 'nextcloud' })]), /isn't a status source/);
 });
 
 test('appHealth: the forms and what they mean', () => {
@@ -147,6 +147,38 @@ test('kumaMonitors: reads /metrics with the key as the basic-auth password', asy
 	const list = await kumaMonitors(fetch, { url: 'https://kuma', apiKey: 'uk1_x' });
 	assert.equal(auth, `Basic ${Buffer.from(':uk1_x').toString('base64')}`);
 	assert.deepEqual(list.map((m) => [m.key, m.url, m.state]), [['3', 'https://git.example.com', 'up'], ['DB', 'http://db.lan', 'down'], ['Mail', 'https://mail.example.com', 'slow']]);
+});
+
+test('gatusMonitors: state from the newest result, why from the failed condition, since from the run', async () => {
+	const now = Date.parse('2026-10-25T02:10:00Z');
+	const at = (min) => new Date(now - min * 60_000).toISOString();
+	const ok = (min) => ({ success: true, status: 200, timestamp: at(min), conditionResults: [{ condition: '[STATUS] == 200', success: true }] });
+	const statuses = [
+		{ key: '_nextcloud', name: 'Nextcloud', results: [ok(9), { success: false, status: 502, timestamp: at(6), conditionResults: [{ condition: '[STATUS] (502) == 200', success: false }] }, { success: false, status: 502, timestamp: at(1), conditionResults: [{ condition: '[STATUS] (502) == 200', success: false }] }] },
+		{ key: '_paperless', name: 'Paperless', results: [{ success: false, status: 200, timestamp: at(1), conditionResults: [{ condition: '[STATUS] == 200', success: true }, { condition: '[RESPONSE_TIME] (3503) < 1000', success: false }] }] },
+		{ key: 'media_jellyfin', name: 'Jellyfin', group: 'media', results: [ok(1)] },
+		{ key: '_old', name: 'Old', results: [ok(90)] }
+	];
+	const fetch = fakeFetch({ '/api/v1/endpoints/statuses': statuses });
+	const list = await gatusMonitors(fetch, { url: 'https://gatus', apiKey: 'holm:secret' }, now);
+	assert.deepEqual(list[0], { key: '_nextcloud', name: 'Nextcloud', url: '', state: 'down', since: now - 6 * 60_000, detail: 'answered 502 Bad Gateway' });
+	assert.equal(list[1].state, 'slow');
+	assert.equal(list[1].detail, 'took 3.5s');
+	assert.deepEqual([list[2].state, list[2].longer], ['up', true]);
+	assert.equal(list[3].state, 'failed');
+	assert.equal(namedMonitor('media_jellyfin', list).name, 'Jellyfin');
+	assert.equal(matchMonitor({ id: 'jellyfin', name: 'Jellyfin' }, list).key, 'media_jellyfin');
+});
+
+test('cachetMonitors: component status, its label as why, every page, enabled ones only', async () => {
+	const c = (id, name, value, human, extra = {}) => ({ id: String(id), type: 'components', attributes: { name, link: `https://${name.toLowerCase()}.example.org/`, enabled: true, latest_status: { value, human }, ...extra } });
+	const fetch = fakeFetch({
+		'&page=1': { data: [c(1, 'Photos', 1, 'Operational'), c(2, 'Nextcloud', 4, 'Major outage'), c(3, 'Paperless', 2, 'Performance issues')], links: { next: 'https://cachet/api/components?page=2' } },
+		'&page=2': { data: [c(4, 'Jellyfin', 6, 'Under maintenance'), c(5, 'Off', 4, 'Major outage', { enabled: false })], links: {} }
+	});
+	const list = await cachetMonitors(fetch, { url: 'https://cachet' });
+	assert.deepEqual(list.map((m) => [m.key, m.state, m.detail]), [['1', 'up', undefined], ['2', 'down', 'Major outage'], ['3', 'slow', 'Performance issues'], ['4', 'maintenance', undefined]]);
+	assert.equal(matchMonitor({ id: 'cloud', url: 'https://nextcloud.example.org/apps' }, list).key, '2');
 });
 
 test('httpStatus: 2xx, 3xx, 401, 403 and 429 are up; others and no answer are down, with why', async () => {

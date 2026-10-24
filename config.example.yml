@@ -59,9 +59,9 @@ customization:
 # only get it for apps they can see. The key never leaves the server.
 # Without this block, `health: true` has Holm check the app's own URL.
 # health:
-#   source: kener                       # kener | uptime_kuma | http (Holm checks)
+#   source: kener                       # kener | uptime_kuma | gatus | cachet | http (Holm checks)
 #   url: "https://status.example.com"
-#   api_key: "${KENER_API_KEY}"         # Kener: Manage → API Keys. Uptime Kuma: Settings → API Keys
+#   api_key: "${KENER_API_KEY}"         # Kener: Manage → API Keys. Uptime Kuma: Settings → API Keys. Gatus: user:password, if it asks. Cachet: only if its API is protected
 #   every: 60s                          # 30s or more
 #   page: "https://status.example.com"  # optional: your public status page; the tip links to it
 

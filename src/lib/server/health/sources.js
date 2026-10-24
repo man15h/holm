@@ -9,7 +9,7 @@ const SLOW_MS = 3000;
 // Kener's results older than this mean Kener has stopped checking.
 const KENER_STALE = 30 * 60_000;
 
-export const SOURCE_NAMES = { kener: 'Kener', uptime_kuma: 'Uptime Kuma', http: 'Holm' };
+export const SOURCE_NAMES = { kener: 'Kener', uptime_kuma: 'Uptime Kuma', gatus: 'Gatus', cachet: 'Cachet', http: 'Holm' };
 
 async function get(fetch, url, headers = {}) {
 	const res = await fetch(url, { headers: { 'user-agent': 'Holm', ...headers }, signal: AbortSignal.timeout(TIMEOUT) });
@@ -132,6 +132,68 @@ export async function kumaMonitors(fetch, source) {
 		monitors.push({ key: l.monitor_id || l.monitor_name, name: l.monitor_name, url, state, detail: m[2] === '2' ? 'failing, being retried' : undefined });
 	}
 	if (!monitors.length && !text.includes('monitor_')) throw new Error('unexpected reply from Uptime Kuma');
+	return monitors;
+}
+
+// --- Gatus (/api/v1/endpoints/statuses) --------------------------------------
+
+// Gatus keeps the last results of every endpoint, oldest first, and doesn't
+// say where it checks, so its endpoints match by name or key.
+const GATUS_STALE = 30 * 60_000;
+
+// Why a Gatus result failed: the HTTP status or the response time when that
+// was the condition, else Gatus's error, else the condition as written.
+function gatusWhy(r) {
+	const failed = (r.conditionResults || []).filter((c) => !c.success).map((c) => c.condition);
+	const status = failed.map((c) => c.match(/^\[STATUS\] \((\d+)\)/)).find(Boolean);
+	if (status) return `answered ${status[1]}${REASONS[status[1]] ? ` ${REASONS[status[1]]}` : ''}`;
+	const took = failed.map((c) => c.match(/^\[RESPONSE_TIME\] \((\d+)\)/)).find(Boolean);
+	if (took) return `took ${(took[1] / 1000).toFixed(1)}s`;
+	return r.errors?.[0] || failed[0];
+}
+
+function gatusState(results, now) {
+	if (!results.length) return { state: 'failed', detail: 'Gatus has no results for it yet' };
+	const last = results[results.length - 1];
+	const at = (r) => Date.parse(r.timestamp);
+	if (now - at(last) > GATUS_STALE) return { state: 'failed', detail: 'Gatus has no recent result' };
+	// Only a response-time condition failing is slow, not down.
+	const failed = (last.conditionResults || []).filter((c) => !c.success);
+	const state = last.success ? 'up' : failed.length && failed.every((c) => c.condition.startsWith('[RESPONSE_TIME]')) ? 'slow' : 'down';
+	let i = results.length - 1;
+	while (i > 0 && results[i - 1].success === last.success) i--;
+	return { state, since: at(results[i]), ...(i === 0 && { longer: true }), ...(state !== 'up' && { detail: gatusWhy(last) }) };
+}
+
+/** Every endpoint and its state from one read. `api_key` is `user:password` when Gatus asks for a login. */
+export async function gatusMonitors(fetch, source, now = Date.now()) {
+	const headers = source.apiKey ? { authorization: `Basic ${Buffer.from(source.apiKey).toString('base64')}` } : {};
+	const data = await (await get(fetch, `${source.url}/api/v1/endpoints/statuses`, headers)).json();
+	if (!Array.isArray(data)) throw new Error('unexpected reply from Gatus');
+	return data.map((e) => ({ key: e.key, name: e.name, url: '', ...gatusState(e.results || [], now) }));
+}
+
+// --- Cachet (v3, /api/components) --------------------------------------------
+
+// Component status: 1 operational, 2 performance issues, 3 partial outage,
+// 4 major outage, 5 unknown, 6 under maintenance.
+const CACHET_STATES = { 1: 'up', 2: 'slow', 3: 'slow', 4: 'down', 5: 'failed', 6: 'maintenance' };
+
+/** Every enabled component and its status, its link as its URL. */
+export async function cachetMonitors(fetch, source) {
+	const headers = source.apiKey ? { authorization: `Bearer ${source.apiKey}` } : {};
+	const monitors = [];
+	for (let page = 1; page <= 20; page++) {
+		const data = await (await get(fetch, `${source.url}/api/components?per_page=100&page=${page}`, { accept: 'application/json', ...headers })).json();
+		if (!Array.isArray(data?.data)) throw new Error('unexpected reply from Cachet');
+		for (const { id, attributes: a = {} } of data.data) {
+			if (a.enabled === false) continue;
+			const status = a.latest_status ?? a.status;
+			const state = CACHET_STATES[status?.value] || 'failed';
+			monitors.push({ key: String(id), name: a.name, url: a.link || '', state, ...(state !== 'up' && state !== 'maintenance' && status?.human && { detail: status.human }) });
+		}
+		if (!data.links?.next) break;
+	}
 	return monitors;
 }
 

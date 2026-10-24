@@ -4,7 +4,10 @@
 // check that is due starts in the background (as updateCheck.js does).
 
 import { appHealth } from './config.js';
-import { SOURCE_NAMES, kenerMonitors, kenerStatus, kenerNotices, kumaMonitors, httpStatus, matchMonitor, namedMonitor } from './sources.js';
+import { SOURCE_NAMES, kenerMonitors, kenerStatus, kenerNotices, kumaMonitors, gatusMonitors, cachetMonitors, httpStatus, matchMonitor, namedMonitor } from './sources.js';
+
+// Sources that answer for every monitor in one read.
+const LISTS = { uptime_kuma: kumaMonitors, gatus: gatusMonitors, cachet: cachetMonitors };
 
 // The monitor list changes rarely; Kener's is read at most this often.
 const LIST_EVERY = 10 * 60_000;
@@ -53,8 +56,8 @@ function monitorFor(app, plan, list, source) {
 
 /**
  * `{ [app id]: { state, since?, detail?, source } }` for those of `apps` with a
- * check and an answer so far. `source` names who checked: Kener, Uptime Kuma
- * or Holm.
+ * check and an answer so far. `source` names who checked: Kener, Uptime Kuma,
+ * Gatus, Cachet or Holm.
  */
 export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.now() } = {}) {
 	const out = {};
@@ -82,13 +85,14 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 				if (on) value = { state: on.state, detail: on.title, ...(on.until && { until: on.until }) };
 			}
 		} else {
-			by = 'Uptime Kuma';
-			const list = cached('kuma:list', source.every, () => kumaMonitors(fetch, source), now);
-			if (list?.error) value = { state: 'failed', detail: trouble('Uptime Kuma', list.error) };
+			by = SOURCE_NAMES[source.source];
+			const list = cached(`${source.source}:list`, source.every, () => LISTS[source.source](fetch, source, now), now);
+			if (list?.error) value = { state: 'failed', detail: trouble(by, list.error) };
 			else if (list) {
 				const monitor = monitorFor(app, plan, list, source);
-				if (monitor) value = { state: monitor.state, detail: monitor.detail };
-				if (monitor && source.page) link = source.page;
+				if (monitor) value = { state: monitor.state, ...(monitor.since && { since: monitor.since }), ...(monitor.longer && { longer: true }), ...(monitor.detail && { detail: monitor.detail }) };
+				// Gatus has a page per endpoint; Kuma and Cachet, one page.
+				if (monitor && source.page) link = source.source === 'gatus' ? `${source.page}/endpoints/${encodeURIComponent(monitor.key)}` : source.page;
 			}
 		}
 		if (value?.error) value = { state: 'failed', detail: trouble(by, value.error) };

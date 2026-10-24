@@ -2,7 +2,7 @@
 // each app's opt-in. Read once per config load; nothing here does I/O.
 //
 //   health:                       # optional; without it only `url` checks work
-//     source: kener               # kener | uptime_kuma | http
+//     source: kener               # kener | uptime_kuma | gatus | cachet | http
 //     url: https://status.example.com
 //     api_key: ${KENER_API_KEY}
 //     every: 60s
@@ -16,7 +16,7 @@
 //     - id: navidrome
 //       health: { url: http://navidrome:4533/ping, every: 5m }   # Holm checks it
 
-export const SOURCES = ['kener', 'uptime_kuma', 'http'];
+export const SOURCES = ['kener', 'uptime_kuma', 'gatus', 'cachet', 'http'];
 export const MIN_EVERY = 30_000;
 export const DEFAULT_EVERY = 60_000;
 
@@ -89,7 +89,7 @@ function appError(app, source) {
 		}
 		return null;
 	}
-	const needsSource = () => (!source || source.source === 'http' ? `${name}: health names a monitor, but health.source isn't kener or uptime_kuma` : null);
+	const needsSource = () => (!source || source.source === 'http' ? `${name}: health names a monitor, but health.source isn't a status source (kener, uptime_kuma, gatus or cachet)` : null);
 	if (typeof h === 'string') return h.trim() ? needsSource() : `${name}: health must not be empty`;
 	if (!isMapping(h)) return `${name}: health must be true, false, a monitor name or a mapping, not ${show(h)}`;
 	for (const key of Object.keys(h)) {
@@ -113,12 +113,12 @@ export function healthError(config, apps = []) {
 			if (!['source', 'url', 'api_key', 'every', 'page'].includes(key)) return `health.${key} isn't a setting; use source, url, api_key, every or page`;
 		}
 		const source = h.source ?? 'http';
-		if (!SOURCES.includes(source)) return `health.source must be kener, uptime_kuma or http, not ${show(h.source)}`;
+		if (!SOURCES.includes(source)) return `health.source must be kener, uptime_kuma, gatus, cachet or http, not ${show(h.source)}`;
 		if (source !== 'http') {
 			if (!isHttpUrl(h.url)) return `health.url must be the http(s) address of ${source}, not ${show(h.url)}`;
 			if (source === 'kener' && !h.api_key) return 'health.api_key is required for kener (Manage → API Keys)';
 		} else if (h.url !== undefined || h.api_key !== undefined) {
-			return 'health.url and health.api_key are for kener or uptime_kuma; with source: http each app sets its own url';
+			return 'health.url and health.api_key are for a status source; with source: http each app sets its own url';
 		}
 		if (h.page !== undefined && !isHttpUrl(h.page)) return `health.page must be the http(s) address of your status page, not ${show(h.page)}`;
 		const err = everyError(h.every, 'health.every');
