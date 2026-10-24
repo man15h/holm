@@ -6,6 +6,10 @@ using it. Headings are `## <version> — <date>`. One line per change:
 **New:**, **Improved:** or **Fixed:**, then a plain line of at most about
 twelve words, ending with a link to its PR.
 
+## Unreleased
+
+- **New:** Tiles show a dot when their app is down or slow. ([#PR](https://github.com/OWNER/holm/pull/PR))
+
 ## 0.10.1 — 2026-10-22
 
 - **Fixed:** Runs on Node 22.23.4, which patches October's Node security issues. ([#109](https://github.com/man15h/holm/pull/109))

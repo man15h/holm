@@ -1,6 +1,8 @@
 import { accessSync, existsSync, mkdirSync, constants } from 'fs';
 import { dirname, join } from 'path';
-import { getConfig, getIntegrationsConfig } from '$lib/server/config.js';
+import { getConfig, getIntegrationsConfig, getAppsConfig } from '$lib/server/config.js';
+import { healthSource } from '$lib/server/health/config.js';
+import { healthFor } from '$lib/server/health/index.js';
 import { getMasterKey } from '$lib/server/secrets.js';
 import { resolveDbPath } from '$lib/server/db.js';
 import { parseFrameAncestors, allowFraming } from '$lib/server/framing.js';
@@ -44,6 +46,9 @@ export function init() {
 	for (const warning of clickActionWarnings(config.apps)) {
 		console.warn(`[holm] config: ${warning}`);
 	}
+	// The first health checks start now, so an app whose monitor can't be
+	// found is named in the log at startup rather than on the first visit.
+	healthFor(getAppsConfig(), healthSource(config));
 }
 
 // Response headers for every request. The Content-Security-Policy itself is

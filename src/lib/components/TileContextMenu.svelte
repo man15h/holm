@@ -3,8 +3,10 @@
 	import { portal } from '$lib/actions/portal.js';
 	import AppIcon from '$lib/components/AppIcon.svelte';
 
-	// A tile's right-click / long-press menu, placed beside its tile.
-	let { app, anchor, hasGuide = false, onopen, onguide, onclose } = $props();
+	// A tile's right-click / long-press menu, placed beside its tile. `health`
+	// is the tile's health line (lib/health.js), shown on top: on a phone
+	// there's no hover to read it from.
+	let { app, anchor, hasGuide = false, health = null, onopen, onguide, onclose } = $props();
 
 	let menuEl = $state(null);
 	const host = $derived.by(() => { try { return new URL(app.url).host; } catch { return ''; } });
@@ -72,6 +74,15 @@
 	role="menu"
 	aria-label="{app.name} options"
 >
+	{#if health}
+		<div class="tile-menu-health">
+			<i class="health-{health.tone}"></i>
+			<div class="min-w-0">
+				<div class="tile-menu-health-title">{health.title}</div>
+				{#if health.rest}<div class="tile-menu-host">{health.rest}</div>{/if}
+			</div>
+		</div>
+	{/if}
 	<!-- Which app this menu belongs to -->
 	<div class="tile-menu-head">
 		<AppIcon icon={app.icon} name={app.name} size="w-[22px] h-[22px]" wrapSize="w-9 h-9" iconStyle="colored" wrap />

@@ -22,6 +22,8 @@
 	} from '$lib/widgets/layout.js';
 	import { POPULAR_APPS } from '$lib/popularApps.js';
 	import { recordOpen } from '$lib/launcher/frecency.js';
+	import { healthLine, healthLabel } from '$lib/health.js';
+	import { portal } from '$lib/actions/portal.js';
 
 	let {
 		guideApp = $bindable(null),
@@ -256,6 +258,45 @@
 		surfaceUndo = null;
 		clearTimeout(surfaceUndoTimer);
 		if (snapshot) prefs.update((p) => ({ ...p, widgetLayout: snapshot.widgetLayout }));
+	}
+
+	// ── App health: the server checks, this only asks for the last answers ──
+	const HEALTH_POLL = 30_000;
+	let health = $state({});
+	let healthNow = $state(Date.now());
+	let healthTip = $state(null);
+
+	async function loadHealth() {
+		try {
+			const res = await fetch('/api/health');
+			if (res.ok) health = (await res.json()).apps || {};
+		} catch { /* keep the last answers */ }
+		healthNow = Date.now();
+	}
+
+	$effect(() => {
+		if (!browser || !configApps.length) return;
+		loadHealth();
+		// Right after a restart the server may not have answers yet.
+		const soon = setTimeout(loadHealth, 5000);
+		const timer = setInterval(() => {
+			if (document.visibilityState === 'visible') loadHealth();
+		}, HEALTH_POLL);
+		const onVisible = () => document.visibilityState === 'visible' && loadHealth();
+		document.addEventListener('visibilitychange', onVisible);
+		return () => {
+			clearTimeout(soon);
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', onVisible);
+		};
+	});
+
+	function showHealthTip(app, e) {
+		const line = healthLine(app, health[app.id], healthNow);
+		if (!line || editMode) return;
+		// Under the tile, so it never covers the name.
+		const r = e.currentTarget.getBoundingClientRect();
+		healthTip = { line, x: Math.max(8, Math.min(r.left, window.innerWidth - 340)), y: r.bottom + 6 };
 	}
 
 	// ── Tile context menu (right-click / long-press) — ported from AppGrid ──
@@ -634,8 +675,11 @@
 						rel={openInNewTab ? 'noopener noreferrer' : undefined}
 						class="app-tile-link"
 						class:menu-open={contextApp?.id === app.id}
-						title={app.name}
-						aria-label={app.name}
+						class:health-faded={health[app.id]?.state === 'down'}
+						title={healthLine(app, health[app.id]) ? undefined : app.name}
+						aria-label={healthLabel(app, health[app.id])}
+						onmouseenter={(e) => showHealthTip(app, e)}
+						onmouseleave={() => (healthTip = null)}
 						onclick={(e) => {
 							if (editMode || longPressFired) {
 								e.preventDefault();
@@ -659,12 +703,17 @@
 						ontouchend={editMode ? undefined : endLongPress}
 						ontouchmove={editMode ? undefined : cancelLongPress}
 					>
-						<div
-							class="app-tile-icon"
-							style={iconStyle === 'colored' ? getBrandBgStyle(app.icon) : ''}
-						>
-							<AppIcon icon={app.icon} name={app.name} size="w-7 h-7" {iconStyle} />
-						</div>
+						<span class="app-tile-icon-slot">
+							<div
+								class="app-tile-icon"
+								style={iconStyle === 'colored' ? getBrandBgStyle(app.icon) : ''}
+							>
+								<AppIcon icon={app.icon} name={app.name} size="w-7 h-7" {iconStyle} />
+							</div>
+							{#if healthLine(app, health[app.id])}
+								<span class="health-dot health-{healthLine(app, health[app.id]).tone}" aria-hidden="true"></span>
+							{/if}
+						</span>
 						<span class="app-tile-name">{app.name}</span>
 					</a>
 					{#if editMode}
@@ -731,10 +780,18 @@
 		app={contextApp}
 		anchor={contextAnchor}
 		hasGuide={!!setupGuides[contextApp.name]}
+		health={healthLine(contextApp, health[contextApp.id], healthNow)}
 		onopen={(app) => recordAppOpen(app.id)}
 		onguide={openGuide}
 		onclose={() => (contextApp = null)}
 	/>
+{/if}
+
+{#if healthTip && !contextApp}
+	<div use:portal class="health-tip" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px;">
+		<i class="health-{healthTip.line.tone}"></i><b>{healthTip.line.title}</b>
+		{#if healthTip.line.rest}<span class="muted"> · {healthTip.line.rest}</span>{/if}
+	</div>
 {/if}
 
 <!-- Setup Guide Modal (portal to body) -->
@@ -995,6 +1052,78 @@
 		background: rgba(255, 255, 255, 0.06);
 		flex-shrink: 0;
 	}
+	/* Health: the dot sits outside the icon's clip and outside the fade. */
+	.app-tile-icon-slot {
+		position: relative;
+		display: flex;
+		flex-shrink: 0;
+	}
+	.app-tile-link.health-faded .app-tile-icon {
+		opacity: 0.4;
+		filter: grayscale(0.7);
+	}
+	.health-dot {
+		position: absolute;
+		top: -3px;
+		right: -3px;
+		width: 11px;
+		height: 11px;
+		border-radius: 50%;
+		box-shadow: 0 0 0 2px var(--health-ring, rgba(20, 20, 22, 0.85));
+		pointer-events: none;
+	}
+	:global(body.theme-light) .health-dot {
+		--health-ring: #fff;
+	}
+	.health-dot.health-down {
+		background: #ef4444;
+	}
+	.health-dot.health-slow {
+		background: #f59e0b;
+	}
+	.health-dot.health-failed {
+		background: transparent;
+		box-shadow: inset 0 0 0 2px #a1a1aa, 0 0 0 2px var(--health-ring, rgba(20, 20, 22, 0.85));
+	}
+	:global(.health-tip) {
+		position: fixed;
+		z-index: 60;
+		padding: 8px 11px;
+		border-radius: 10px;
+		font-size: 12.5px;
+		font-weight: 500;
+		line-height: 1.35;
+		white-space: nowrap;
+		pointer-events: none;
+		background: rgba(24, 24, 27, 0.92);
+		color: #fafafa;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+		backdrop-filter: blur(16px);
+	}
+	:global(body.theme-light .health-tip) {
+		background: rgba(255, 255, 255, 0.95);
+		color: #18181b;
+		border-color: rgba(0, 0, 0, 0.08);
+	}
+	:global(.health-tip b) {
+		font-weight: 600;
+	}
+	:global(.health-tip .muted) {
+		opacity: 0.65;
+		font-weight: 400;
+	}
+	:global(.health-tip i) {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		margin-right: 7px;
+		vertical-align: 1px;
+	}
+	:global(.health-tip i.health-down) { background: #ef4444; }
+	:global(.health-tip i.health-slow) { background: #f59e0b; }
+	:global(.health-tip i.health-failed) { box-shadow: inset 0 0 0 1.5px #a1a1aa; }
 	.app-tile-name {
 		font-size: 0.7rem;
 		text-align: center;
