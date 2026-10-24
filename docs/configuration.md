@@ -140,7 +140,7 @@ Apps are a flat list. The older `category:` / `items:` shape still loads, flatte
 
 ### App health
 
-A tile can show whether its app is working. Up shows nothing. Down is a red dot, and the tile fades but still opens. Slow, or under maintenance, is amber. A check that didn't work is a grey ring. Hovering says what's wrong and who checked; on a phone, long-press puts the same line at the top of the tile's menu. With `page` set, clicking the tip (or **Status page** in the menu) opens that app's page there: `<page>/monitors/<tag>` for Kener, `<page>/endpoints/<key>` for Gatus, the page itself for Uptime Kuma and Cachet. Screen readers hear it in the tile's name ("Cloud, down").
+A tile can show whether its app is working. Up shows nothing. Down is a red dot, and the tile fades but still opens. Slow, or under maintenance, is amber. A check that didn't work is a grey ring. Hovering says what's wrong and who checked; on a phone, long-press puts the same line at the top of the tile's menu. With `page` set, clicking the tip (or **Status page** in the menu) opens that app's page there: `<page>/monitors/<tag>` for Kener, `<page>/endpoints/<key>` for Gatus, the page itself for Uptime Kuma and Cachet. Screen readers hear it in the tile's name ("Cloud, down"). The tip and menu end with who checked ("Checked by Kener"); `show_source: false` leaves out who checked, for everyone. While `page` is set the tip still ends with "Open status page ↗", and clicking it opens the page. Without `page` the tip doesn't link anywhere.
 
 Pick where the answers come from once, at the top level:
 
@@ -151,6 +151,7 @@ health:
   api_key: "${KENER_API_KEY}"
   every: 60s                          # 30s or more; default 60s
   page: "https://status.example.com"  # optional: the status page people can open
+  show_source: false                 # optional: drop the "Checked by Kener" line
 ```
 
 Then opt each app in. An app without `health:`, or with `health: false`, gets no dot.
@@ -435,7 +436,7 @@ Every key Holm reads. "Reload" means a save takes effect without a restart.
 | `database.path` | path | `./data/holm.db` | restart | `DATABASE_PATH` wins |
 | `customization.enabled` | bool | `false` | yes | Without it there is no Configure panel and the grid is fixed |
 | `apps[]` | list | `[]` | yes | Fields under [Apps](#apps): `id`, `name`, `url`, `icon`, `icon_mono`, `tile_color`, `self_hosted`, `default_visible`, `on_click`, `groups`, `tags` (shown on search results), `app_store`, `browser_extension`, `setup_guide`, `health` ([App health](#app-health)) |
-| `health.source` / `url` / `api_key` / `every` / `page` | | none; `every` `60s` | yes | Where tile health comes from: `kener`, `uptime_kuma`, `gatus`, `cachet` or `http`. Any bad value, or an app with both `monitor` and `url`, is rejected like bad YAML. See [App health](#app-health) |
+| `health.source` / `url` / `api_key` / `every` / `page` / `show_source` | | none; `every` `60s` | yes | Where tile health comes from: `kener`, `uptime_kuma`, `gatus`, `cachet` or `http`. Any bad value, or an app with both `monitor` and `url`, is rejected like bad YAML. See [App health](#app-health) |
 | `search.enabled` / `url` / `param` / `name` / `icon` | | on, Google, `q` when the block is missing | yes | The fallback web search. A `search:` block needs `enabled: true` |
 | `search.on_focus` | `top` \| `in_place` | `top` | yes | Where the bar goes when it opens on desktop: slides up toward the top, or stays put. The default for everyone; each person can override it in Configure → Widgets → Search. Phones always pin it above the keyboard. Any other value is rejected like bad YAML, with the reason in the log |
 | `search.transparency` | `theme` \| `solid` | `theme` | yes | How see-through the bar and its results are. `theme` follows Configure → Appearance → Glass on every theme; `solid` keeps the bar solid whatever Glass says. The default for everyone; each person can override it in Configure → Widgets → Search. Any other value is rejected like bad YAML |

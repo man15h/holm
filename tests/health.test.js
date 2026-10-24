@@ -63,6 +63,8 @@ test('healthError: bad top-level settings', () => {
 	assert.match(healthError({ health: { ...KENER, colour: 'red' } }), /health.colour/);
 	assert.match(healthError({ health: { ...KENER, page: 'status' } }), /health.page/);
 	assert.equal(healthError({ health: { ...KENER, page: 'https://status.example.org/' } }), null);
+	assert.match(healthError({ health: { ...KENER, show_source: 'no' } }), /health.show_source/);
+	assert.equal(healthError({ health: { ...KENER, show_source: false } }), null);
 });
 
 test('healthError: bad per-app settings', () => {

@@ -276,6 +276,9 @@
 
 	// Configure → Widgets → App status turns the dots off for this person.
 	const healthOn = $derived(siteConfig?.health?.enabled && $prefs.healthDots !== false);
+	// health.show_source: false in config.yml drops "Checked by …" from the
+	// tip and menu, for everyone; "Open status page ↗" stays while `page` is set.
+	const healthBy = siteConfig?.health?.show_source !== false;
 
 	$effect(() => {
 		if (!healthOn) health = {};
@@ -294,6 +297,11 @@
 			document.removeEventListener('visibilitychange', onVisible);
 		};
 	});
+
+	function healthMenuLine(app) {
+		const line = healthLine(app, health[app.id], healthNow);
+		return line && !healthBy ? { ...line, by: '' } : line;
+	}
 
 	let healthTipTimer = null;
 	function showHealthTip(app, e) {
@@ -794,7 +802,7 @@
 		app={contextApp}
 		anchor={contextAnchor}
 		hasGuide={!!setupGuides[contextApp.name]}
-		health={healthLine(contextApp, health[contextApp.id], healthNow)}
+		health={healthMenuLine(contextApp)}
 		onopen={(app) => recordAppOpen(app.id)}
 		onguide={openGuide}
 		onclose={() => (contextApp = null)}
@@ -804,7 +812,8 @@
 {#snippet healthTipBody(line)}
 	<div><i class="health-{line.tone}"></i><b>{line.title}</b></div>
 	{#if line.rest}<div class="muted">{line.rest}</div>{/if}
-	{#if line.by || line.link}<div class="by">{line.by}{#if line.link}{line.by ? ' · ' : ''}Open status page ↗{/if}</div>{/if}
+	{@const by = healthBy ? line.by : ''}
+	{#if by || line.link}<div class="by">{by}{#if line.link}{by ? ' · ' : ''}Open status page ↗{/if}</div>{/if}
 {/snippet}
 {#if healthTip && !contextApp}
 	{#if healthTip.line.link}

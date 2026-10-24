@@ -207,7 +207,7 @@ export async function getClientConfig({ authenticated = true, user = null } = {}
 		// How an app is checked stays on the server; /api/health has the answers.
 		apps: visibleApps.map(({ health, ...app }) => app),
 		// Whether any of them has a check, so Configure offers the switch.
-		health: { enabled: visibleApps.some((app) => appHealth(app, healthSource(config))) },
+		health: { enabled: visibleApps.some((app) => appHealth(app, healthSource(config))), show_source: config.health?.show_source !== false },
 		customization: { enabled: config.customization?.enabled ?? false },
 		search: getSearchConfig(),
 		wallpapers: clientWallpapers(config),
