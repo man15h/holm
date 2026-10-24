@@ -5,6 +5,7 @@ import { getMasterKey } from '$lib/server/secrets.js';
 import { resolveDbPath } from '$lib/server/db.js';
 import { parseFrameAncestors, allowFraming } from '$lib/server/framing.js';
 import { clickActionWarnings } from '$lib/apps.js';
+import { getAdapter } from '$lib/server/integrations/index.js';
 
 // Runs once at startup. Any problem here stops Holm with the reason, rather
 // than serving with sign-in off or an encryption key nobody chose.
@@ -32,9 +33,10 @@ export function init() {
 	getMasterKey();
 
 	// Without default_url, each user picks the server URL, and Holm fetches
-	// it from inside your network.
+	// it from inside your network. Claude and OpenAI have no URL to pick.
 	for (const [id, entry] of Object.entries(getIntegrationsConfig())) {
-		if (entry && typeof entry === 'object' && entry.enabled !== false && !entry.default_url) {
+		const takesUrl = getAdapter(id)?.configSchema?.some((f) => f.fromOperatorDefault === 'default_url') ?? true;
+		if (takesUrl && entry && typeof entry === 'object' && entry.enabled !== false && !entry.default_url) {
 			console.warn(`[holm] config: integrations.${id} has no default_url, so users can point it at any http(s) host Holm can reach`);
 		}
 	}

@@ -1,4 +1,5 @@
 import { prefs } from '$lib/stores/prefs.js';
+import { clearAllLocal } from '$lib/aiCalls.js';
 
 // The search bar's commands: run with !bang or found by name.
 // Icon SVG strings are pre-rendered paths (fed into a <svg> wrapper in the row).
@@ -15,7 +16,7 @@ export function buildActions({ wallpapers, onSettingsOpen }) {
 	return [
 		{ id: 'settings', bang: 'settings', label: 'Open Configure', keywords: ['settings', 'preferences', 'integrations', 'widgets'], icon: ICONS.settings, exec: onSettingsOpen },
 		// manual: never auto-runs on the last keystroke; needs Enter or a click
-		{ id: 'logout', bang: 'logout', label: 'Log out', keywords: ['sign out', 'logout'], icon: ICONS.logout, manual: true, exec: () => { window.location.href = '/auth/logout'; } },
+		{ id: 'logout', bang: 'logout', label: 'Log out', keywords: ['sign out', 'logout'], icon: ICONS.logout, manual: true, exec: () => { clearAllLocal(); window.location.href = '/auth/logout'; } },
 		// Wallpapers only show in the Dynamic theme, so switch to it; otherwise
 		// the pick is saved under Light/Dark and nothing visibly changes.
 		...(wallpapers ? [{

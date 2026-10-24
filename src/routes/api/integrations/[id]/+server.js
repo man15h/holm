@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { getSessionUser } from '$lib/server/session.js';
 import { getAdapter, getOperatorDefaults } from '$lib/server/integrations/index.js';
+import { callsInBrowser } from '$lib/server/integrations/ai.js';
 import { checkUrls, urlOriginChanged, withoutSecrets } from '$lib/server/integrations/urlPolicy.js';
 import {
 	getConnection,
@@ -24,6 +25,11 @@ export async function PUT({ cookies, url, request, params, fetch }) {
 
 	const adapter = getAdapter(params.id);
 	if (!adapter) return json({ error: 'Unknown integration' }, { status: 404 });
+
+	// With `calls: browser` the key is never sent here, and never stored.
+	if (callsInBrowser(adapter, getOperatorDefaults(adapter.id))) {
+		return json({ error: 'This integration runs in your browser, and its key stays on your device' }, { status: 409 });
+	}
 
 	const body = await readJson(request);
 	if (!body) return json({ error: 'Invalid JSON' }, { status: 400 });

@@ -8,7 +8,8 @@ const config = {
 		// theme script, via %sveltekit.nonce%). Images, fonts and stylesheets
 		// stay open because operators point icons, wallpapers and fonts
 		// anywhere; connect-src lists the only hosts the browser calls itself
-		// (weather and place search).
+		// (weather and place search, and Claude or OpenAI set to
+		// `calls: browser`).
 		csp: {
 			mode: 'auto',
 			directives: {
@@ -22,7 +23,9 @@ const config = {
 					'self',
 					'https://api.open-meteo.com',
 					'https://geocoding-api.open-meteo.com',
-					'https://nominatim.openstreetmap.org'
+					'https://nominatim.openstreetmap.org',
+					'https://api.anthropic.com',
+					'https://api.openai.com'
 				],
 				'object-src': ['none'],
 				'base-uri': ['self'],

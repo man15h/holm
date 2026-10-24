@@ -184,6 +184,7 @@
 	   --hero-search-* tokens. */
 	--hero-search-border: var(--glass-border);
 	--hero-search-text: #fafafa;
+	--hero-search-text-inverse: #09090b;
 	--hero-search-text-dim: rgba(255, 255, 255, 0.64);
 	--hero-search-text-strong: rgba(255, 255, 255, 0.85);
 	--hero-search-chip-bg: rgba(255, 255, 255, 0.06);
@@ -197,6 +198,7 @@
 .theme-dark {
 	--hero-search-border: var(--glass-border);
 	--hero-search-text: #fafafa;
+	--hero-search-text-inverse: #09090b;
 	--hero-search-text-dim: rgba(255, 255, 255, 0.64);
 	--hero-search-text-strong: rgba(255, 255, 255, 0.85);
 	--hero-search-chip-bg: rgba(255, 255, 255, 0.06);
@@ -214,6 +216,7 @@ body:not(.theme-dark):not(.theme-light) .hero-search:not(.is-open) .hero-search-
 	--hero-search-bg: rgba(255, 255, 255, 0.78);
 	--hero-search-border: rgba(255, 255, 255, 0.6);
 	--hero-search-text: #18181b;
+	--hero-search-text-inverse: #fafafa;
 	--hero-search-text-dim: rgba(0, 0, 0, 0.5);
 	--hero-search-text-strong: rgba(0, 0, 0, 0.85);
 	--hero-search-chip-bg: rgba(0, 0, 0, 0.05);
@@ -293,6 +296,7 @@ body:not(.theme-dark):not(.theme-light) .hero-search[data-glass='solid']:not(.is
 	   matching the white menu surface there. */
 	--hero-search-border: rgba(0, 0, 0, 0.10);
 	--hero-search-text: #18181b;
+	--hero-search-text-inverse: #fafafa;
 	--hero-search-text-dim: rgba(0, 0, 0, 0.45);
 	--hero-search-text-strong: rgba(0, 0, 0, 0.85);
 	--hero-search-chip-bg: rgba(0, 0, 0, 0.05);
@@ -981,7 +985,8 @@ body.search-active .launcher-host { z-index: 40; }
 	backdrop-filter: var(--glass-blur);
 	transition:
 		box-shadow 220ms var(--ease-standard),
-		border-color 220ms var(--ease-standard);
+		border-color 220ms var(--ease-standard),
+		transform 250ms var(--ease-standard);
 }
 .hero-search-form:focus-within {
 	border-color: var(--hero-search-border);
@@ -1128,6 +1133,41 @@ body.search-active .launcher-host { z-index: 40; }
 	color: var(--hero-search-text-dim);
 }
 .hero-search-form .clear-btn:hover { color: var(--hero-search-text); }
+/* "Ask Claude" in the bar, when nothing matched or the query is a question.
+   Accent-tinted while Enter would send it; a quiet chip once the user has
+   arrowed to a result. */
+.ask-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+	margin-right: 6px;
+	padding: 5px 10px;
+	border: none;
+	border-radius: 999px;
+	background: var(--hero-search-chip-bg);
+	box-shadow: inset 0 0 0 1px var(--hero-search-chip-border);
+	color: var(--hero-search-text);
+	font: inherit;
+	font-size: 0.72rem;
+	white-space: nowrap;
+	cursor: pointer;
+	animation: ask-pill-in 160ms var(--ease-standard) both;
+	transition: background 150ms var(--ease-standard), box-shadow 150ms var(--ease-standard);
+}
+.ask-pill svg { width: 14px; height: 14px; color: var(--hero-search-text); }
+.ask-pill.is-leading {
+	background: color-mix(in srgb, var(--hero-search-text) 18%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hero-search-text) 40%, transparent);
+}
+.ask-pill:hover { filter: brightness(1.1); }
+.ask-pill:focus-visible { outline: 2px solid var(--hero-search-text); outline-offset: 2px; }
+.ask-pill-key { display: inline-flex; opacity: 0.75; }
+.ask-pill kbd { display: inline-flex; border: none; padding: 0; background: none; box-shadow: none; color: inherit; }
+/* A phone's bar is narrow: the pill says just "Ask" (its label names the AI). */
+@media (max-width: 479px) { .ask-pill-name { display: none; } }
+@keyframes ask-pill-in { from { opacity: 0; transform: scale(0.94); } }
+@media (prefers-reduced-motion: reduce) { .ask-pill { animation: none; } }
 
 /* "Recent" chips — one-click reopens of the last N apps the user
    launched. Sits below the search slot, above the full app grid.
@@ -1652,6 +1692,198 @@ body.search-active .launcher-host { z-index: 40; }
 	color: var(--hero-search-text-dim);
 }
 .launcher-answer-arrow { width: 18px; height: 18px; color: var(--hero-search-text-dim); }
+/* AI answers: straight on the panel above the results, no card, and the
+   chat it opens into. Selected (Enter continues) shows as an accent rule. */
+.launcher-item.is-ai {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 10px 10px 12px;
+	border-left: 2px solid transparent;
+	cursor: default;
+	transition: border-color 150ms var(--ease-standard);
+}
+.launcher-item.is-ai.is-selected:not(:has(.ai-thinking, .is-streaming)) { border-left-color: color-mix(in srgb, var(--hero-search-text) 60%, transparent); }
+.launcher-section-label.is-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+.ai-byline { font-size: 0.7rem; color: var(--hero-search-text-dim); }
+.ai-show-results {
+	align-self: flex-start;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--hero-search-text-dim);
+	font: inherit;
+	font-size: 0.72rem;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+	cursor: pointer;
+}
+.ai-show-results:hover { color: var(--hero-search-text); }
+.ai-card-body { min-width: 0; }
+.ai-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.ai-card-actions .launcher-detail-btn { margin-left: auto; }
+.ai-card-actions .launcher-detail-btn.is-primary { background: var(--hero-search-text); color: var(--hero-search-text-inverse); }
+.ai-error { padding: 8px 0 0; }
+.ai-cut-off { margin-top: 8px; font-size: 0.7rem; color: var(--hero-search-text-dim); }
+
+.ai-markdown {
+	font-size: 0.85rem;
+	line-height: 1.65;
+	color: var(--hero-search-text-strong);
+	overflow-wrap: anywhere;
+}
+.ai-markdown.is-plain { white-space: pre-wrap; }
+.ai-markdown > :first-child { margin-top: 0; }
+.ai-markdown > :last-child { margin-bottom: 0; }
+.ai-markdown :where(p, ul, ol, pre, blockquote, table) { margin: 0 0 0.7em; }
+.ai-markdown :where(ul, ol) { padding-left: 1.3em; }
+.ai-markdown ul { list-style: disc; }
+.ai-markdown ol { list-style: decimal; }
+.ai-markdown li + li { margin-top: 0.25em; }
+.ai-markdown :where(h1, h2, h3, h4) { margin: 0.9em 0 0.4em; font-size: 0.85rem; font-weight: 700; color: var(--hero-search-text); }
+.ai-markdown strong { font-weight: 700; color: var(--hero-search-text); }
+.ai-markdown a { color: var(--hero-search-text); text-decoration: underline; text-underline-offset: 2px; }
+.ai-markdown code { padding: 0.1em 0.35em; border-radius: 4px; background: color-mix(in srgb, var(--hero-search-text) 8%, transparent); font-size: 0.8rem; }
+.ai-markdown pre { padding: 10px 12px; border-radius: 8px; overflow-x: auto; background: color-mix(in srgb, var(--hero-search-text) 7%, transparent); }
+.ai-markdown pre code { padding: 0; background: none; }
+.ai-markdown blockquote { padding-left: 10px; border-left: 2px solid var(--hero-search-chip-border); color: var(--hero-search-text-dim); }
+.ai-markdown table { border-collapse: collapse; font-size: 0.78rem; display: block; overflow-x: auto; }
+.ai-markdown :where(th, td) { padding: 4px 8px; border: 1px solid var(--hero-search-chip-border); text-align: left; }
+/* A caret at the end of the text while it's still being written. */
+.ai-markdown.is-streaming > :last-child::after,
+.ai-markdown.is-streaming.is-plain::after {
+	content: '';
+	display: inline-block;
+	width: 0.5em;
+	height: 1em;
+	margin-left: 2px;
+	vertical-align: -0.15em;
+	background: var(--hero-search-text);
+	animation: ai-caret 1s steps(2, start) infinite;
+}
+@keyframes ai-caret { to { visibility: hidden; } }
+
+/* Before the first word: three dots that breathe. */
+.ai-thinking { display: flex; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--hero-search-text-dim); }
+.ai-thinking-dots { display: inline-flex; gap: 4px; }
+.ai-thinking-dots span {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--hero-search-text);
+	animation: ai-breathe 1.2s var(--ease-standard, ease-in-out) infinite;
+}
+.ai-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+.ai-thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ai-breathe {
+	0%, 100% { opacity: 0.25; transform: scale(0.8); }
+	50% { opacity: 1; transform: none; }
+}
+
+.launcher-chat { display: flex; flex-direction: column; gap: 10px; padding: 10px 10px 20px; }
+.launcher-chat-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--hero-search-border); }
+.launcher-chat-head .launcher-detail-back { position: static; background: var(--hero-search-chip-bg); color: var(--hero-search-text-strong); box-shadow: inset 0 0 0 1px var(--hero-search-chip-border); }
+.launcher-chat-title { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.72rem; color: var(--hero-search-text); white-space: nowrap; }
+.launcher-chat-tokens { color: var(--hero-search-text-dim); font-variant-numeric: tabular-nums; }
+.launcher-chat-title svg { width: 14px; height: 14px; color: var(--hero-search-text); }
+.ai-bubble { max-width: 100%; animation: fade-in-up 240ms var(--ease-standard) both; }
+.ai-bubble.is-user {
+	align-self: flex-end;
+	max-width: 85%;
+	padding: 8px 12px;
+	border-radius: 12px 12px 4px 12px;
+	background: color-mix(in srgb, var(--hero-search-text) 16%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hero-search-text) 28%, transparent);
+	color: var(--hero-search-text);
+	font-size: 0.85rem;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ai-bubble.is-assistant { padding: 4px 2px; }
+.ai-composer {
+	flex: none;
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	margin: 0 10px 10px;
+	padding: 8px 8px 8px 12px;
+	border-radius: 12px;
+	background: var(--hero-search-chip-bg);
+	box-shadow: inset 0 0 0 1px var(--hero-search-chip-border);
+	transition: box-shadow 150ms var(--ease-standard);
+}
+.ai-composer:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hero-search-text) 35%, transparent); }
+.ai-composer textarea {
+	flex: 1;
+	min-width: 0;
+	max-height: calc(6 * 1.5em + 8px);
+	padding: 4px 0;
+	overflow-y: hidden;
+	border: none;
+	outline: none;
+	resize: none;
+	background: transparent;
+	color: var(--hero-search-text-strong);
+	font: inherit;
+	font-size: 0.85rem;
+	line-height: 1.5;
+}
+.ai-composer textarea::placeholder { color: var(--hero-search-text-dim); }
+.ai-composer-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 30px;
+	height: 30px;
+	border: none;
+	border-radius: 8px;
+	background: var(--hero-search-text);
+	color: var(--hero-search-text-inverse);
+	cursor: pointer;
+	transition: opacity 150ms ease, filter 150ms ease;
+}
+.ai-composer-btn:disabled { opacity: 0.3; cursor: default; }
+.ai-composer-btn:not(:disabled):hover { filter: brightness(0.9); }
+.ai-composer-btn svg { width: 16px; height: 16px; }
+/* The chat: the panel takes the results' full height, over the bar, which
+   fades out; the chat brings its own message box. The bar keeps its place
+   in the page, so nothing around it moves. */
+.hero-search .launcher-panel { transition: top 250ms var(--ease-standard); }
+/* The joined surface's shadow is on the wrapper, which is only as tall as
+   the bar; the panel carries it in a chat. */
+.hero-search.is-open.is-chat { box-shadow: none; }
+.hero-search.is-chat .launcher-panel {
+	top: 0;
+	height: var(--results-max-h);
+	max-height: none;
+	margin-top: 0 !important;
+	border-radius: var(--radius-lg, 14px) !important;
+	border-top: 1px solid var(--hero-search-border) !important;
+	box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.45), 0 4px 12px -4px rgba(0, 0, 0, 0.18) !important;
+}
+.hero-search.is-chat .launcher-scroll:not(.launcher-chat) { opacity: 0; transition: opacity 120ms var(--ease-standard); }
+.hero-search.is-chat .hero-search-form { opacity: 0; transition: opacity 120ms var(--ease-standard); }
+.launcher-chat { animation: launcher-chat-in 180ms var(--ease-standard) both; }
+@keyframes launcher-chat-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+	.hero-search-form, .hero-search .launcher-panel, .hero-search.is-chat .launcher-scroll { transition: none; }
+	.launcher-chat { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.ai-thinking-dots span, .ai-markdown.is-streaming > :last-child::after, .ai-markdown.is-streaming.is-plain::after { animation: none; }
+	.ai-bubble { animation: none; }
+}
+
 /* A bare "2ft": its conversions side by side, sharing the right half. */
 .launcher-answer-results {
 	display: flex;

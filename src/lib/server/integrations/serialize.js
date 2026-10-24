@@ -43,6 +43,7 @@ export function adapterToClient(adapter, { icon, name, tip, shortcut } = {}) {
 			label: w.label,
 			description: w.description || ''
 		})),
+		answers: !!adapter.answers,
 		widgetsOnConnect: !!adapter.widgetsOnConnect,
 		multiAccount: !!adapter.multiAccount
 	};

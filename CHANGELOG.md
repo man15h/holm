@@ -6,6 +6,10 @@ using it. Headings are `## <version> — <date>`. One line per change:
 **New:**, **Improved:** or **Fixed:**, then a plain line of at most about
 twelve words, ending with a link to its PR.
 
+## Unreleased
+
+- **New:** Ask Claude, OpenAI or your own Ollama from search, and keep chatting. Claude and OpenAI keep the key in your browser and call from there; `calls: server` moves the key and the calls to Holm's server. ([#111](https://github.com/man15h/holm/pull/111))
+
 ## 0.10.1 — 2026-10-22
 
 - **Fixed:** Runs on Node 22.23.4, which patches October's Node security issues. ([#109](https://github.com/man15h/holm/pull/109))

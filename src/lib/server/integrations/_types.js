@@ -14,7 +14,7 @@
  * @property {boolean} [required]               Defaults to false
  * @property {string} [placeholder]
  * @property {string} [help]                    Small helper text shown under the field
- * @property {{ baseKey: string, path: string, label: string }} [helpUrl]  Clickable link built from config[baseKey] + path
+ * @property {{ baseKey?: string, path?: string, url?: string, label: string }} [helpUrl]  Clickable link: `url` as is (a hosted service's console), else built from config[baseKey] + path
  * @property {string} [fromOperatorDefault]     If set, the form pre-fills from `integrations.<id>.<value>` in config.yml
  * @property {{ value: string, label: string, hex: string }[]} [options]  The swatches of a 'color' field; the value stored is `value`
  * @property {string} [default]                 Shown, and saved, when the field has no value yet
@@ -162,6 +162,8 @@
  * @property {boolean} [multiAccount]  The user can add more accounts under the first (up to 5), stored as `config.accounts`: each a config of the same schema plus an `id`, checked and redacted like the first. The adapter reads them all (see accountsOf in caldav.js)
  * @property {boolean} [widgetsOnConnect]  Turn the widgets switch on when the user first connects (where the operator allows widgets); otherwise it starts off
  * @property {(ctx: { config: object, fetch: typeof fetch, timeZone: string }) => Promise<Reminder[]>} [reminders]  Reminders due in the next day, or already due for an event not yet over, for GET /api/reminders; asked only while the user's widgets switch is on
+ * @property {{ stream: (ctx: { config: object, system: string, messages: { role: 'user'|'assistant', content: string }[], fetch: typeof fetch }) => AsyncIterable<string>, modelName?: (ctx: { config: object, fetch: typeof fetch }) => Promise<string> }} [answers]  AI answers in search (Claude, OpenAI, OpenAI-compatible): yields the answer's text as it arrives, for POST /api/ai, then `CUT_OFF` (ai.js) if it hit the length limit; `modelName` names the model for the answer's byline (Claude's display name, else the model id). Answer only: it gets the conversation and no tools or Holm data
+ * @property {boolean} [browserCalls]  Its `test` and `answers.stream` run in the browser too (src/lib/aiProviders.js), so the operator may set `calls: browser`: the key then stays on the user's device and Holm's server never sees it (callsInBrowser in ai.js)
  * @property {(ctx: { config: object, fetch: typeof fetch, timeZone: string }) => Promise<UpcomingEvent[]>} [upcoming]  The next events, still on now to a week ahead, for GET /api/upcoming; asked only while the user's widgets switch is on
  */
 

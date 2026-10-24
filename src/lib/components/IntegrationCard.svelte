@@ -1,6 +1,7 @@
 <script>
 	import { onDestroy } from 'svelte';
 	import { marked } from 'marked';
+	import { NAMES } from '$lib/aiCalls.js';
 	import AppIcon from './AppIcon.svelte';
 	import IntegrationAccounts from './IntegrationAccounts.svelte';
 	import { integrations as integrationsStore } from '$lib/stores/integrations.js';
@@ -383,6 +384,11 @@
 					{integration.tip}
 				</div>
 			{/if}
+			{#if integration.calls === 'browser'}
+				<div class="text-[0.7rem] text-content-dim leading-relaxed px-2 py-1.5 rounded-lg bg-surface-card/40 border border-border-card" data-testid="stored-on-device">
+					Stored on this device only. The key goes straight to {NAMES[integration.id] || integration.name}, never to Holm. Enter it again on other devices.
+				</div>
+			{/if}
 			{#snippet mainForm()}
 				<div class="space-y-2">
 					{#snippet fieldRow(field)}
@@ -430,9 +436,9 @@
 											{@html marked.parse(field.help)}
 										</div>
 									{/if}
-									{#if field.helpUrl && formConfig[field.helpUrl.baseKey]}
+									{#if field.helpUrl && (field.helpUrl.url || formConfig[field.helpUrl.baseKey])}
 										<a
-											href="{formConfig[field.helpUrl.baseKey]}{field.helpUrl.path}"
+											href={field.helpUrl.url || `${formConfig[field.helpUrl.baseKey]}${field.helpUrl.path}`}
 											target="_blank"
 											rel="noopener noreferrer"
 											class="inline-block text-[0.7rem] text-blue-400 hover:text-blue-300 mt-1 no-underline hover:underline"

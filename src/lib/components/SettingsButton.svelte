@@ -1,6 +1,7 @@
 <script>
 	import { getContext } from 'svelte';
 	import { prefs } from '$lib/stores/prefs.js';
+	import { clearAllLocal } from '$lib/aiCalls.js';
 	import { browser } from '$app/environment';
 
 	const siteConfig = getContext('config');
@@ -15,6 +16,7 @@
 
 	function handleLogout() {
 		prefs.reset();
+		clearAllLocal();
 		window.location.href = '/auth/logout';
 	}
 

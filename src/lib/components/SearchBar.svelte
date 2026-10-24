@@ -6,7 +6,7 @@
 	import { prefs } from '$lib/stores/prefs.js';
 	import { resolveIcon } from '$lib/apps.js';
 	import SearchResults from './SearchResults.svelte';
-	import { isMac } from './Keys.svelte';
+	import Keys, { isMac } from './Keys.svelte';
 	import { bestScore } from '$lib/launcher/match.js';
 	import { buildActions, matchBang } from '$lib/launcher/actions.js';
 	import { arrangeProviderSections, topHit } from '$lib/launcher/sections.js';
@@ -16,6 +16,8 @@
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
 	import { searchOnFocus } from '$lib/searchOnFocus.js';
 	import { searchTransparency, searchGlassLevel, searchHints } from '$lib/searchLook.js';
+	import { streamAnswer, followUpMessages, MAX_CHAT_MESSAGES } from '$lib/aiAnswer.js';
+	import { streamInBrowser } from '$lib/aiCalls.js';
 
 	const siteConfig = getContext('config');
 	const searchConfig = siteConfig?.search || { enabled: true, url: 'https://www.google.com/search', param: 'q' };
@@ -27,6 +29,7 @@
 	// bottom edge to the viewport bottom minus a breathing gap. Recomputed on
 	// open + window resize so the panel never spills past the visible area.
 	let resultsMaxHeight = $state(420);
+	let formHeight = $state(52);
 	// On desktop the open palette slides up toward the top of the viewport,
 	// Spotlight-style, so short screens (a 14" laptop) give the results most
 	// of the height instead of the strip under a mid-page bar, unless the
@@ -219,6 +222,7 @@
 	const FIRST_HINT = 'Search apps, files, photos…';
 	const PLACEHOLDER_HINTS = $derived([
 		FIRST_HINT,
+		...(aiIntegration ? [`Ask ${aiLabel(aiIntegration)} anything: type a question, then Enter`] : []),
 		...(scopeHint ? [scopeHint] : []),
 		'Type a command, like “dark” or “wallpaper”',
 		'Do quick maths, like “12 * 7” or “5 km in mi”',
@@ -481,6 +485,150 @@
 			: null
 	});
 
+	// ── AI answers ────────────────────────────────────────────────
+	// With Claude, OpenAI or a self-hosted AI connected, a question asked from
+	// the bar (the "Ask" row, or Shift+Enter) streams an answer into a card above the
+	// results. "Continue conversation" opens it as a chat in place of the
+	// list. It lives only here: a new search, or closing Holm, forgets it.
+	const aiChoices = $derived($integrationsStore.integrations.filter((it) => it.answers && it.userState?.connected));
+	// With more than one connected, the one asked last (kept on this device).
+	let lastAi = $state(null);
+	onMount(() => { try { lastAi = localStorage.getItem('holm.ai-last'); } catch {} });
+	const aiIntegration = $derived(aiChoices.find((it) => it.id === lastAi) || aiChoices[0] || null);
+	// "Ask Claude", "Ask GPT"; a self-hosted AI by the name it was given.
+	const aiLabel = (it) => ({ claude: 'Claude', openai: 'GPT' })[it?.id] || it?.name || 'AI';
+	// { question, name, messages: [{ role, content }], streaming, error, chat }
+	let ai = $state(null);
+	let aiAbort = null;
+	let aiSeq = 0;
+
+	function stopAi() {
+		aiAbort?.abort();
+		aiAbort = null;
+		if (ai) ai.streaming = false;
+	}
+
+	async function runAi(messages) {
+		stopAi();
+		const seq = ++aiSeq;
+		const ctrl = new AbortController();
+		aiAbort = ctrl;
+		ai.messages = [...messages, { role: 'assistant', content: '' }];
+		ai.streaming = true;
+		ai.error = '';
+		const answer = ai.messages[ai.messages.length - 1];
+		try {
+			const asked = aiChoices.find((it) => it.id === ai.integration);
+			const id = asked?.id;
+			const callbacks = {
+				messages,
+				signal: ctrl.signal,
+				onText: (t) => { if (seq === aiSeq) answer.content += t; },
+				onCutOff: () => { if (seq === aiSeq) answer.cutOff = true; },
+				onModel: (name) => { if (seq === aiSeq) answer.model = name; },
+				onUsage: (u) => { if (seq === aiSeq) answer.usage = u; }
+			};
+			// `calls: browser`: straight to the API with the key on this device.
+			if (asked?.calls === 'browser') await streamInBrowser({ ...callbacks, integration: id, config: integrationsStore.browserConfig(id) });
+			else await streamAnswer({ ...callbacks, integration: id });
+			if (seq === aiSeq) answer.at = Date.now();
+			// A reasoning model can spend its whole budget thinking and say nothing.
+			if (seq === aiSeq && !answer.content.trim()) ai.error = 'The model finished without an answer. Try again, or another model.';
+		} catch (err) {
+			if (seq === aiSeq && !ctrl.signal.aborted) ai.error = err.message || 'No answer came back';
+		} finally {
+			if (seq === aiSeq) {
+				if (ai) ai.streaming = false;
+				aiAbort = null;
+			}
+		}
+	}
+
+	function askAi(question, choice = aiIntegration) {
+		const q = question.trim();
+		if (!q || !choice) return;
+		stopAi();
+		lastAi = choice.id;
+		try { localStorage.setItem('holm.ai-last', choice.id); } catch {}
+		ai = { question: q, integration: choice.id, name: aiLabel(choice), messages: [], streaming: true, error: '', chat: false };
+		showAllResults = false;
+		chatLayout = false;
+		userMoved = false;
+		runAi([{ role: 'user', content: q }]);
+	}
+
+	// The chat layout: the results fade, and the bar slides to the bottom of
+	// the panel to become the message box; then the conversation fades in
+	// above it. Back (or Esc) runs it in reverse, to the same query and
+	// results. `chatLayout` moves the bar at once, `ai.chat` swaps the list
+	// for the conversation once the list has faded.
+	let chatLayout = $state(false);
+	const chatOn = $derived(chatLayout && !!ai);
+	let chatDraft = $state('');
+	let chatInputEl = $state();
+	let chatTimer;
+	const LIST_FADE_MS = 120;
+	const chatFull = $derived(!!ai && ai.messages.length + 2 > MAX_CHAT_MESSAGES);
+
+	function continueChat() {
+		if (!ai) return;
+		panelOpen = false;
+		chatLayout = true;
+		clearTimeout(chatTimer);
+		const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+		// The message box only exists once the chat is shown, so focus it then.
+		chatTimer = setTimeout(() => {
+			if (!ai || !chatLayout) return;
+			ai.chat = true;
+			tick().then(() => chatInputEl?.focus());
+		}, still ? 0 : LIST_FADE_MS);
+	}
+
+	function leaveChat() {
+		clearTimeout(chatTimer);
+		if (ai) ai.chat = false;
+		chatLayout = false;
+		chatDraft = '';
+		tick().then(() => inputEl?.focus());
+	}
+
+	// Closing the palette leaves the chat; opening it again shows the card.
+	$effect(() => {
+		if (!isPaletteOpen) untrack(() => {
+			if (!chatLayout) return;
+			clearTimeout(chatTimer);
+			chatLayout = false;
+			if (ai) ai.chat = false;
+		});
+	});
+
+	function sendFollowUp() {
+		const text = chatDraft.trim();
+		if (!ai || ai.streaming || chatFull || !text) return;
+		chatDraft = '';
+		runAi(followUpMessages(ai.messages, text));
+	}
+
+	// The chat's message box: Enter sends, Shift+Enter is a new line.
+	function handleChatKeydown(e) {
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			sendFollowUp();
+			return;
+		}
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			e.stopPropagation();
+			leaveChat();
+		}
+	}
+
+	// The other results, once the answer's first words hid them.
+	let showAllResults = $state(false);
+
+	// The first answer, for the card and its Copy.
+	const firstAnswer = $derived(ai?.messages[1]?.content || '');
+
 	function appItem(app) {
 		const key = `app:${app.id}`;
 		let host = '';
@@ -512,7 +660,7 @@
 		if (inlineOpen) frecency = frecencyScores();
 	});
 
-	const sections = $derived.by(() => {
+	const allSections = $derived.by(() => {
 		const q = (query || '').trim();
 		const out = [];
 
@@ -720,6 +868,19 @@
 		// The icon is grey so it doesn't pull the eye from the results.
 		if (q) {
 			const fb = [];
+			// One row per connected AI, so any of them can be asked.
+			if (!activeScope && ai?.question !== q) {
+				for (const it of aiChoices) {
+					fb.push({
+						key: `ask:${it.id}`,
+						title: `Ask ${aiLabel(it)} “${q}”`,
+						subtitle: it === aiIntegration ? 'Shift+Enter' : '',
+						svg: SPARKLE,
+						accessory: 'AI',
+						actions: [{ label: `Ask ${aiLabel(it)}`, run: () => askAi(q, it) }]
+					});
+				}
+			}
 			if (searchConfig?.url) {
 				const param = searchConfig.param || 'q';
 				const url = `${searchConfig.url}${searchConfig.url.includes('?') ? '&' : '?'}${param}=${encodeURIComponent(q)}`;
@@ -736,10 +897,60 @@
 			}
 			if (fb.length) out.push({ id: 'fallbacks', label: 'Use “' + (q.length > 24 ? q.slice(0, 24) + '…' : q) + '” with…', items: fb });
 		}
+		// The AI's answer to this very query sits above everything. While it
+		// is asked the other results step aside; once it is done they wait
+		// behind a "Show N results" link. Editing the query brings them back.
+		if (ai && !activeScope && ai.question === q) {
+			const others = out.reduce((n, s) => n + (s.id === 'fallbacks' ? 0 : s.items.length), 0);
+			const hide = (ai.streaming || !!firstAnswer) && !showAllResults;
+			const item = {
+				key: 'ai',
+				title: ai.question,
+				ai,
+				hidden: hide && !ai.streaming ? others || -1 : 0,
+				showResults: () => { showAllResults = true; },
+				// While it streams there is nothing to continue yet: no actions, no Enter.
+				actions: ai.streaming ? [] : [
+					{ label: 'Continue conversation', run: continueChat },
+					...(firstAnswer ? [{ label: 'Copy answer', run: () => copyText(firstAnswer) }] : []),
+					{ label: 'Ask again', run: () => askAi(ai.question, aiChoices.find((it) => it.id === ai.integration)) }
+				]
+			};
+			const section = { id: 'ai', label: ai.name, layout: 'ai', items: [item] };
+			return hide ? [section] : [section, ...out];
+		}
 		return out;
 	});
 
+	// "what is…", "how do I…", or anything ending in "?".
+	const QUESTION_START = /^(what|who|whom|whose|why|how|when|where|which|is|are|was|were|can|could|should|would|will|do|does|did|explain|tell me|define)\b/i;
+	function isQuestion(q) {
+		return q.endsWith('?') || (QUESTION_START.test(q) && q.split(/\s+/).length >= 3);
+	}
+
+	const SPARKLE = '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>';
+
+	// With the pill in the bar, its own "Ask …" row below would say it twice.
+	const sections = $derived(
+		pillShown
+			? allSections
+				.map((s) => (s.id === 'fallbacks' ? { ...s, items: s.items.filter((i) => i.key !== `ask:${aiIntegration.id}`) } : s))
+				.filter((s) => s.id !== 'fallbacks' || s.items.length)
+			: allSections
+	);
 	const flatItems = $derived(sections.flatMap((s) => s.items));
+
+	// The "Ask Claude" pill in the bar: shown when nothing matched, or the
+	// query reads like a question, and then Enter asks (until the user
+	// arrows to a result). It only ever asks on Enter or a click, never
+	// while typing, so no tokens go on keystrokes.
+	const askQuery = $derived((query || '').trim());
+	const askable = $derived(!!aiIntegration && !activeScope && !detail && !!askQuery && !askQuery.startsWith('!') && ai?.question !== askQuery);
+	const nothingMatched = $derived(
+		!allSections.some((s) => s.loading) && !allSections.some((s) => s.id !== 'fallbacks' && s.id !== 'ai' && s.items.length)
+	);
+	const pillShown = $derived(askable && (nothingMatched || isQuestion(askQuery)));
+	const pillLeads = $derived(pillShown && !userMoved);
 	let selectedKey = $state(null);
 	let panelOpen = $state(false);
 	let panelIndex = $state(0);
@@ -747,23 +958,32 @@
 
 	// Keep a valid selection. Until the user arrows away, it tracks the top
 	// row, so results that arrive late (and sort above the fallbacks) take it.
-	let userMoved = false;
+	let userMoved = $state(false);
 	$effect(() => {
 		const keys = flatItems.map((i) => i.key);
 		const cur = untrack(() => selectedKey);
-		if (!userMoved || !keys.includes(cur)) selectedKey = keys[0] ?? null;
+		if (!untrack(() => userMoved) || !keys.includes(cur)) selectedKey = keys[0] ?? null;
 	});
 	$effect(() => {
 		query;
 		panelOpen = false;
 		userMoved = false;
 		untrack(closeDetail);
+		// A new search forgets the answer, and the chat that grew from it.
+		untrack(() => {
+			if (ai && (query || '').trim() !== ai.question) {
+				stopAi();
+				ai = null;
+				chatLayout = false;
+			}
+		});
 	});
 
 	function moveSelection(delta) {
 		const keys = flatItems.map((i) => i.key);
 		if (!keys.length) return;
-		const i = keys.indexOf(selectedKey);
+		// From the leading "Ask" pill, ↓ lands on the first row and ↑ on the last.
+		const i = pillLeads ? (delta > 0 ? -1 : 0) : keys.indexOf(selectedKey);
 		selectedKey = keys[(i + delta + keys.length) % keys.length];
 		userMoved = true;
 	}
@@ -984,6 +1204,18 @@
 				if (!e.repeat) detail.open?.run();
 				return;
 			}
+			// Shift+Enter asks the AI, whatever row is selected.
+			if (e.shiftKey && aiIntegration && !activeScope && query.trim() && !query.trim().startsWith('!')) {
+				e.preventDefault();
+				if (!e.repeat) askAi(query);
+				return;
+			}
+			// The "Ask" pill leads until the user arrows to a result.
+			if (pillLeads) {
+				e.preventDefault();
+				if (!e.repeat) askAi(query);
+				return;
+			}
 			const item = flatItems.find((i) => i.key === selectedKey);
 			if (item) {
 				e.preventDefault();
@@ -1039,7 +1271,7 @@
 <!-- Close when keyboard focus leaves the palette (Tab-out); click-outside is
      handled by onClickOutside. A null relatedTarget is a click on a
      non-focusable spot, which may be inside the panel, so it's ignored. -->
-<div class="relative hero-search {isPaletteOpen ? 'is-open' : ''}" data-glass={glassLevel} bind:this={containerEl} style="--results-max-h: {resultsMaxHeight}px; --search-lift: {lift}px"
+<div class="relative hero-search {isPaletteOpen ? 'is-open' : ''}" class:is-chat={chatOn && isPaletteOpen} data-glass={glassLevel} bind:this={containerEl} style="--results-max-h: {resultsMaxHeight}px; --search-lift: {lift}px; --form-h: {formHeight}px"
 	onfocusout={(e) => { if (inlineOpen && e.relatedTarget && !containerEl.contains(e.relatedTarget)) { inlineOpen = false; panelOpen = false; } }}>
 	<form
 		class="hero-search-form relative flex items-center px-4 md:px-6"
@@ -1048,6 +1280,8 @@
 		target="_blank"
 		role="search"
 		onsubmit={handleSubmit}
+		bind:offsetHeight={formHeight}
+		inert={chatOn && isPaletteOpen}
 	>
 		<svg class="text-content-dim shrink-0 w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
 
@@ -1079,13 +1313,33 @@
 			aria-expanded={isPaletteOpen}
 			aria-controls={listId}
 			aria-autocomplete="list"
-			aria-activedescendant={isPaletteOpen && selectedKey ? (panelOpen ? `${listId}-action-${panelIndex}` : `${listId}-${selectedKey}`) : undefined}
+			aria-activedescendant={isPaletteOpen && selectedKey && !pillLeads ? (panelOpen ? `${listId}-action-${panelIndex}` : `${listId}-${selectedKey}`) : undefined}
 			onfocus={handleFocus}
 			oninput={handleInput}
 			onkeydown={handleInputKeydown}
 		/>
 
-		{#if query}
+		{#if pillShown && isPaletteOpen}
+			<button
+				type="button"
+				class="ask-pill"
+				class:is-leading={pillLeads}
+				aria-label="Ask {aiLabel(aiIntegration)}: {askQuery}"
+				onmousedown={(e) => e.preventDefault()}
+				onclick={() => askAi(query)}
+			>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{@html SPARKLE}</svg>
+				Ask<span class="ask-pill-name"> {aiLabel(aiIntegration)}</span>
+				{#if pillLeads}<span class="ask-pill-key" aria-hidden="true"><Keys keys="↵" /></span>{/if}
+			</button>
+		{/if}
+		{#if ai?.streaming && ai.question === askQuery}
+			<!-- While it answers, Stop takes the clear button's place. -->
+			<button type="button" class="ask-pill is-leading" onmousedown={(e) => e.preventDefault()} onclick={stopAi}>
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+				Stop
+			</button>
+		{:else if query}
 			<button type="button" class="clear-btn text-sm md:text-base bg-transparent border-none cursor-pointer px-1" aria-label="Clear search" onclick={() => { query = ''; inputEl?.focus(); }}>&times;</button>
 		{:else}
 			<kbd class="hero-search-kbd hidden md:inline-flex items-center gap-0.5 text-[0.7rem] py-1 px-2 rounded border font-mono shrink-0">{#if macKeys}<svg class="kbd-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Command"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3Z"/></svg>{:else}Ctrl&nbsp;{/if}K</kbd>
@@ -1099,7 +1353,7 @@
 		<SearchResults
 			bind:this={resultsEl}
 			{sections}
-			{selectedKey}
+			selectedKey={pillLeads ? null : selectedKey}
 			{panelOpen}
 			bind:panelIndex
 			{listId}
@@ -1112,6 +1366,14 @@
 			answerCopied={answerCopied?.query === query ? answerCopied.index : -1}
 			oncopyanswer={(item, i) => item.actions[i]?.run()}
 			onpanel={() => { panelOpen = !panelOpen; inputEl?.focus(); }}
+			chat={ai?.chat ? ai : null}
+			onchatback={leaveChat}
+			bind:chatDraft
+			bind:chatInputEl
+			{chatFull}
+			onchatsend={sendFollowUp}
+			onchatstop={stopAi}
+			onchatkeydown={handleChatKeydown}
 		/>
 	{/if}
 </div>
