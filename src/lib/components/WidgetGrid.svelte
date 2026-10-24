@@ -291,12 +291,22 @@
 		};
 	});
 
+	let healthTipTimer = null;
 	function showHealthTip(app, e) {
+		clearTimeout(healthTipTimer);
 		const line = healthLine(app, health[app.id], healthNow);
 		if (!line || editMode) return;
-		// Under the tile, so it never covers the name.
+		// Under the tile, so it never covers the name; as wide as the line
+		// needs, up to the window's edge, moving left when that's too close.
 		const r = e.currentTarget.getBoundingClientRect();
-		healthTip = { line, x: Math.max(8, Math.min(r.left, window.innerWidth - 340)), y: r.bottom + 6 };
+		const vw = window.innerWidth;
+		const x = vw - 8 - r.left < 360 ? Math.max(8, vw - 8 - 360) : r.left;
+		healthTip = { line, x, y: r.bottom + 6, max: vw - 8 - x };
+	}
+	// A moment's grace, so the pointer can reach a tip that links somewhere.
+	function hideHealthTip() {
+		clearTimeout(healthTipTimer);
+		healthTipTimer = setTimeout(() => (healthTip = null), healthTip?.line.link ? 250 : 0);
 	}
 
 	// ── Tile context menu (right-click / long-press) — ported from AppGrid ──
@@ -679,7 +689,7 @@
 						title={healthLine(app, health[app.id]) ? undefined : app.name}
 						aria-label={healthLabel(app, health[app.id])}
 						onmouseenter={(e) => showHealthTip(app, e)}
-						onmouseleave={() => (healthTip = null)}
+						onmouseleave={hideHealthTip}
 						onclick={(e) => {
 							if (editMode || longPressFired) {
 								e.preventDefault();
@@ -787,11 +797,29 @@
 	/>
 {/if}
 
+{#snippet healthTipBody(line)}
+	<div><i class="health-{line.tone}"></i><b>{line.title}</b></div>
+	{#if line.rest}<div class="muted">{line.rest}</div>{/if}
+	{#if line.by || line.link}<div class="by">{line.by}{#if line.link}{line.by ? ' · ' : ''}Open status page ↗{/if}</div>{/if}
+{/snippet}
 {#if healthTip && !contextApp}
-	<div use:portal class="health-tip" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px;">
-		<div><i class="health-{healthTip.line.tone}"></i><b>{healthTip.line.title}</b></div>
-		{#if healthTip.line.rest}<div class="muted">{healthTip.line.rest}</div>{/if}
-	</div>
+	{#if healthTip.line.link}
+		<a
+			use:portal
+			class="health-tip linked"
+			href={healthTip.line.link}
+			target="_blank"
+			rel="noopener noreferrer"
+			style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;"
+			onmouseenter={() => clearTimeout(healthTipTimer)}
+			onmouseleave={hideHealthTip}
+			onclick={() => (healthTip = null)}
+		>{@render healthTipBody(healthTip.line)}</a>
+	{:else}
+		<div use:portal class="health-tip" role="tooltip" style="left: {healthTip.x}px; top: {healthTip.y}px; max-width: {healthTip.max}px;">
+			{@render healthTipBody(healthTip.line)}
+		</div>
+	{/if}
 {/if}
 
 <!-- Setup Guide Modal (portal to body) -->
@@ -1093,13 +1121,20 @@
 		font-size: 12.5px;
 		font-weight: 500;
 		line-height: 1.35;
-		max-width: 320px;
 		pointer-events: none;
+		text-decoration: none;
 		background: rgba(24, 24, 27, 0.92);
 		color: #fafafa;
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 		backdrop-filter: blur(16px);
+	}
+	:global(.health-tip.linked) {
+		pointer-events: auto;
+		cursor: pointer;
+	}
+	:global(.health-tip.linked:hover .by) {
+		opacity: 0.8;
 	}
 	:global(body.theme-light .health-tip) {
 		background: rgba(255, 255, 255, 0.95);
@@ -1114,6 +1149,12 @@
 		opacity: 0.65;
 		font-weight: 400;
 		margin: 2px 0 0 15px;
+	}
+	:global(.health-tip .by) {
+		opacity: 0.5;
+		font-size: 11px;
+		font-weight: 400;
+		margin: 4px 0 0 15px;
 	}
 	:global(.health-tip i) {
 		display: inline-block;

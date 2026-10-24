@@ -20,8 +20,9 @@ export function duration(ms) {
 }
 
 /**
- * `{ tone, title, rest }` for a tile that isn't up, else null. tone is
- * down | slow | failed; `rest` is the muted part, ending with who checked.
+ * `{ tone, title, rest, by, link }` for a tile that isn't up, else null. tone
+ * is down | slow | failed; `rest` is the muted part; `by` says who checked;
+ * `link` is the status page for it, when the operator set one.
  */
 export function healthLine(app, h, now = Date.now()) {
 	const s = h && STATES[h.state];
@@ -30,8 +31,7 @@ export function healthLine(app, h, now = Date.now()) {
 	if (s.is && h.since) rest.push(`for ${h.longer ? 'over ' : ''}${duration(now - h.since)}`);
 	if (h.detail) rest.push(h.detail);
 	if (h.until) rest.push(`until ${new Date(h.until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`);
-	if (s.is) rest.push(`checked by ${h.source}`);
-	return { tone: s.tone, title: s.is ? `${app.name} ${s.is}` : 'Status unknown', rest: rest.join(' · ') };
+	return { tone: s.tone, title: s.is ? `${app.name} ${s.is}` : 'Status unknown', rest: rest.join(' · '), by: s.is ? `Checked by ${h.source}` : '', link: h.link || null };
 }
 
 /** `Cloud, down`; just the name when it's up or unchecked. */

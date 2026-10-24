@@ -80,6 +80,7 @@
 			<div class="min-w-0">
 				<div class="tile-menu-health-title">{health.title}</div>
 				{#if health.rest}<div class="tile-menu-host">{health.rest}</div>{/if}
+				{#if health.by}<div class="tile-menu-health-by">{health.by}</div>{/if}
 			</div>
 		</div>
 	{/if}
@@ -92,6 +93,12 @@
 		</div>
 	</div>
 	<div class="py-1.5">
+		{#if health?.link}
+			<a href={health.link} target="_blank" rel="noopener noreferrer" class="tile-menu-item" role="menuitem" onclick={() => onclose()}>
+				<svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+				Status page
+			</a>
+		{/if}
 		<a href={app.url} target="_blank" rel="noopener noreferrer" class="tile-menu-item" role="menuitem" onclick={() => { onopen(app); onclose(); }}>
 			<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
 			Open {app.name}

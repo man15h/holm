@@ -140,7 +140,7 @@ Apps are a flat list. The older `category:` / `items:` shape still loads, flatte
 
 ### App health
 
-A tile can show whether its app is working. Up shows nothing. Down is a red dot, and the tile fades but still opens. Slow, or under maintenance, is amber. A check that didn't work is a grey ring. Hovering says what's wrong and who checked; on a phone, long-press puts the same line at the top of the tile's menu. Screen readers hear it in the tile's name ("Cloud, down").
+A tile can show whether its app is working. Up shows nothing. Down is a red dot, and the tile fades but still opens. Slow, or under maintenance, is amber. A check that didn't work is a grey ring. Hovering says what's wrong and who checked; on a phone, long-press puts the same line at the top of the tile's menu. With `page` set, clicking the tip (or **Status page** in the menu) opens that app's page there: `<page>/monitors/<tag>` for Kener, the page itself for Uptime Kuma. Screen readers hear it in the tile's name ("Cloud, down").
 
 Pick where the answers come from once, at the top level:
 
@@ -150,6 +150,7 @@ health:
   url: "https://status.example.com"
   api_key: "${KENER_API_KEY}"
   every: 60s                          # 30s or more; default 60s
+  page: "https://status.example.com"  # optional: the status page people can open
 ```
 
 Then opt each app in. An app without `health:`, or with `health: false`, gets no dot.
@@ -174,7 +175,7 @@ apps:
 
 Holm's server does every check and keeps the answer, so one check per `every` serves everyone, however many are looking. People only get health for apps they can see (`groups:`), from `/api/health`, which needs a session. The URL and key stay on the server.
 
-**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check. Kener's API doesn't say why a monitor is down, so when one isn't up its tip shows the monitor's **description**: write the reason there ("Moving to a new disk, back tonight"). A changed description shows within 10 minutes. A Kener **maintenance** happening now outranks the last result: the tile shows its impact (maintenance amber, or down or degraded) with the maintenance's title and when it ends, read once per `every`.
+**Kener** (v4): create a key under Manage → API Keys. Kener's keys can't be limited to reading, so this key can also change monitors; keep it in an environment variable, never in `config.yml`. Holm reads the monitor list (each monitor's URL comes with it, which is how `true` matches) every 10 minutes, and each matched monitor's latest result once per `every`. Results older than 30 minutes count as a failed check. Kener's API doesn't say why a monitor is down, so when one isn't up its tip shows the monitor's **description**: write the reason there ("Moving to a new disk, back tonight"). A changed description shows within 10 minutes. A Kener **maintenance** happening now, or an **incident** not yet resolved, outranks the last result: the tile shows its impact (maintenance amber, degraded amber, or down) with its title, and a maintenance's end time. Both are read once per `every`; a maintenance wins over an incident.
 
 **Uptime Kuma**: create a key under Settings → API Keys; Holm reads `/metrics` with it once per `every` for all apps. Pending (a failed check being retried) shows amber.
 
@@ -428,7 +429,7 @@ Every key Holm reads. "Reload" means a save takes effect without a restart.
 | `database.path` | path | `./data/holm.db` | restart | `DATABASE_PATH` wins |
 | `customization.enabled` | bool | `false` | yes | Without it there is no Configure panel and the grid is fixed |
 | `apps[]` | list | `[]` | yes | Fields under [Apps](#apps): `id`, `name`, `url`, `icon`, `icon_mono`, `tile_color`, `self_hosted`, `default_visible`, `on_click`, `groups`, `tags` (shown on search results), `app_store`, `browser_extension`, `setup_guide`, `health` ([App health](#app-health)) |
-| `health.source` / `url` / `api_key` / `every` | | none; `every` `60s` | yes | Where tile health comes from: `kener`, `uptime_kuma` or `http`. Any bad value, or an app with both `monitor` and `url`, is rejected like bad YAML. See [App health](#app-health) |
+| `health.source` / `url` / `api_key` / `every` / `page` | | none; `every` `60s` | yes | Where tile health comes from: `kener`, `uptime_kuma` or `http`. Any bad value, or an app with both `monitor` and `url`, is rejected like bad YAML. See [App health](#app-health) |
 | `search.enabled` / `url` / `param` / `name` / `icon` | | on, Google, `q` when the block is missing | yes | The fallback web search. A `search:` block needs `enabled: true` |
 | `search.on_focus` | `top` \| `in_place` | `top` | yes | Where the bar goes when it opens on desktop: slides up toward the top, or stays put. The default for everyone; each person can override it in Configure → Widgets → Search. Phones always pin it above the keyboard. Any other value is rejected like bad YAML, with the reason in the log |
 | `search.transparency` | `theme` \| `solid` | `theme` | yes | How see-through the bar and its results are. `theme` follows Configure → Appearance → Glass on every theme; `solid` keeps the bar solid whatever Glass says. The default for everyone; each person can override it in Configure → Widgets → Search. Any other value is rejected like bad YAML |

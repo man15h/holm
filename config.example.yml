@@ -63,6 +63,7 @@ customization:
 #   url: "https://status.example.com"
 #   api_key: "${KENER_API_KEY}"         # Kener: Manage → API Keys. Uptime Kuma: Settings → API Keys
 #   every: 60s                          # 30s or more
+#   page: "https://status.example.com"  # optional: your public status page; the tip links to it
 
 # ── Apps ────────────────────────────────────────────────────
 # Flat list of apps the operator wants to expose. Holm surfaces each app as

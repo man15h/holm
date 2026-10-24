@@ -4,7 +4,7 @@
 // check that is due starts in the background (as updateCheck.js does).
 
 import { appHealth } from './config.js';
-import { SOURCE_NAMES, kenerMonitors, kenerStatus, kenerMaintenances, kumaMonitors, httpStatus, matchMonitor, namedMonitor } from './sources.js';
+import { SOURCE_NAMES, kenerMonitors, kenerStatus, kenerNotices, kumaMonitors, httpStatus, matchMonitor, namedMonitor } from './sources.js';
 
 // The monitor list changes rarely; Kener's is read at most this often.
 const LIST_EVERY = 10 * 60_000;
@@ -63,6 +63,8 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 		if (!plan || !app.id) continue;
 		let value;
 		let by = 'Holm';
+		// The operator's public status page, for the tip to open.
+		let link;
 		if (plan.url) {
 			value = cached(`url:${plan.url}`, plan.every, () => httpStatus(fetch, plan.url), now);
 		} else if (source.source === 'kener') {
@@ -71,11 +73,13 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 			if (list?.error) value = { state: 'failed', detail: trouble('Kener', list.error) };
 			else if (list) {
 				const monitor = monitorFor(app, plan, list, source);
+				if (monitor && source.page) link = `${source.page}/monitors/${encodeURIComponent(monitor.key)}`;
 				if (monitor) value = cached(`kener:${monitor.key}`, plan.every, () => kenerStatus(fetch, source, monitor.key, now), now);
-				// A maintenance on it outranks its last result and says why.
-				const maint = cached('kener:maintenances', source.every, () => kenerMaintenances(fetch, source, now), now);
-				const on = monitor && !maint?.error && maint?.[monitor.key];
-				if (on) value = { state: on.state, detail: on.title, until: on.until };
+				// A maintenance or open incident on it outranks its last result
+				// and says why.
+				const notices = cached('kener:notices', source.every, () => kenerNotices(fetch, source, now), now);
+				const on = monitor && !notices?.error && notices?.[monitor.key];
+				if (on) value = { state: on.state, detail: on.title, ...(on.until && { until: on.until }) };
 				// Otherwise Kener's API says a monitor is down but not why; the
 				// monitor's description is where the operator can say.
 				else if (monitor?.description && value?.state && value.state !== 'up' && !value.detail) value = { ...value, detail: monitor.description };
@@ -87,10 +91,11 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 			else if (list) {
 				const monitor = monitorFor(app, plan, list, source);
 				if (monitor) value = { state: monitor.state, detail: monitor.detail };
+				if (monitor && source.page) link = source.page;
 			}
 		}
 		if (value?.error) value = { state: 'failed', detail: trouble(by, value.error) };
-		if (value) out[app.id] = { ...value, source: by };
+		if (value) out[app.id] = { ...value, source: by, ...(link && { link }) };
 	}
 	return out;
 }

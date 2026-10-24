@@ -2219,6 +2219,7 @@ body.search-active .launcher-host { z-index: 40; }
 .tile-menu-health i.health-failed { box-shadow: inset 0 0 0 1.5px #a1a1aa; }
 .tile-menu-health-title { font-size: 0.8rem; font-weight: 600; color: var(--color-content); }
 .tile-menu-health .tile-menu-host { white-space: normal; }
+.tile-menu-health-by { font-size: 0.62rem; color: var(--color-content-dim); opacity: 0.8; margin-top: 3px; }
 .tile-menu-item {
 	display: flex;
 	align-items: center;

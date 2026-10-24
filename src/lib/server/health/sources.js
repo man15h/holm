@@ -76,13 +76,23 @@ export async function kenerStatus(fetch, source, key, now = Date.now()) {
 const IMPACT = { DOWN: 'down', DEGRADED: 'slow', MAINTENANCE: 'maintenance' };
 
 /**
- * Kener maintenances happening now: `{ [monitor tag]: { state, title, until } }`.
- * One read of the active maintenances, then one of each one's events.
+ * What Kener says is happening now, by monitor tag: `{ state, title, until? }`
+ * from a maintenance under way, else from an incident not yet resolved.
+ * One read of incidents and of active maintenances, then one of each
+ * maintenance's events.
  */
-export async function kenerMaintenances(fetch, source, now = Date.now()) {
+export async function kenerNotices(fetch, source, now = Date.now()) {
 	const auth = { authorization: `Bearer ${source.apiKey}` };
-	const list = (await (await get(fetch, `${source.url}/api/v4/maintenances?status=ACTIVE`, auth)).json())?.maintenances;
 	const out = {};
+	const incidents = (await (await get(fetch, `${source.url}/api/v4/incidents`, auth)).json())?.incidents;
+	for (const i of Array.isArray(incidents) ? incidents : []) {
+		if (i.state === 'RESOLVED' || (i.end_date_time && i.end_date_time * 1000 <= now)) continue;
+		for (const { monitor_tag, impact = 'DOWN' } of i.monitors || []) {
+			const state = IMPACT[impact];
+			if (state) out[monitor_tag] = { state, title: i.title };
+		}
+	}
+	const list = (await (await get(fetch, `${source.url}/api/v4/maintenances?status=ACTIVE`, auth)).json())?.maintenances;
 	for (const m of Array.isArray(list) ? list : []) {
 		if (m.status !== 'ACTIVE' || !m.monitors?.length) continue;
 		const events = (await (await get(fetch, `${source.url}/api/v4/maintenances/${m.id}/events`, auth)).json())?.events || [];
