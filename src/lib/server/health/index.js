@@ -80,9 +80,6 @@ export function healthFor(apps, source, { fetch = globalThis.fetch, now = Date.n
 				const notices = cached('kener:notices', source.every, () => kenerNotices(fetch, source, now), now);
 				const on = monitor && !notices?.error && notices?.[monitor.key];
 				if (on) value = { state: on.state, detail: on.title, ...(on.until && { until: on.until }) };
-				// Otherwise Kener's API says a monitor is down but not why; the
-				// monitor's description is where the operator can say.
-				else if (monitor?.description && value?.state && value.state !== 'up' && !value.detail) value = { ...value, detail: monitor.description };
 			}
 		} else {
 			by = 'Uptime Kuma';

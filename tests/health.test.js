@@ -179,17 +179,16 @@ test('healthFor: one check per interval, however many ask', async () => {
 	assert.equal(fetch.calls.filter((u) => u.includes('/data')).length, 2);
 });
 
-test('healthFor: a Kener monitor that is down carries its description', async () => {
+test('healthFor: a Kener monitor links to its page on the status page', async () => {
 	const now = 1_800_000_000_000;
-	const list = { monitors: [{ ...kenerList.monitors[0], description: 'Proxy has no route for it' }] };
-	const fetch = fakeFetch({ '/data': { data: [{ timestamp: now / 1000 - 60, status: 'DOWN' }] }, '/api/v4/monitors': list });
+	const fetch = fakeFetch({ '/data': { data: [{ timestamp: now / 1000 - 60, status: 'DOWN' }] }, '/api/v4/monitors': kenerList });
 	const source = healthSource({ health: KENER });
 	const apps = [app('cloud', { health: true })];
 	healthFor(apps, source, { fetch, now });
 	await healthSettled();
 	healthFor(apps, source, { fetch, now });
 	await healthSettled();
-	assert.equal(healthFor(apps, source, { fetch, now }).cloud.detail, 'Proxy has no route for it');
+	assert.equal(healthFor(apps, source, { fetch, now }).cloud.link, undefined);
 	// With a public status page set, the tip links to the monitor's page there.
 	const linked = healthFor(apps, { ...source, page: 'https://status.example.org' }, { fetch, now }).cloud;
 	assert.equal(linked.link, 'https://status.example.org/monitors/cloud');
