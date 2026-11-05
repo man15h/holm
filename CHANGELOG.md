@@ -4,9 +4,11 @@ What changed in each Holm release, newest first. Holm shows a version's
 section in its "What's new" dialog, so each entry is written for the people
 using it. Headings are `## <version> — <date>`. One line per change:
 **New:**, **Improved:** or **Fixed:**, then a plain line of at most about
-twelve words, ending with a link to its PR. Each pull request into `dev` adds
-its line under `## Unreleased`; the release pull request renames that heading
-to the version and date.
+twelve words, ending with a link to its PR. Pull requests don't edit this
+file: each puts its line in its description, as `Changelog: **Fixed:** …`.
+The `[release]` pull request for an alpha copies the lines of the pull
+requests merged since the last release under `## Unreleased`; the release
+pull request renames that heading to the version and date.
 
 ## 0.12.0 — 2026-11-05
 
