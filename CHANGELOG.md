@@ -10,6 +10,10 @@ The `[release]` pull request for an alpha copies the lines of the pull
 requests merged since the last release under `## Unreleased`; the release
 pull request renames that heading to the version and date.
 
+## Unreleased
+
+- **New:** Vikunja integration: search tasks and create new tasks into your Inbox with `!vk`. ([#133](https://github.com/man15h/holm/pull/133))
+
 ## 0.12.0 — 2026-11-05
 
 - **New:** Invidious integration: search YouTube with `!yt` through a self-hosted or external Invidious server. ([#125](https://github.com/man15h/holm/pull/125), [#129](https://github.com/man15h/holm/pull/129), [#130](https://github.com/man15h/holm/pull/130))
