@@ -17,7 +17,10 @@ import {
 	addInstance,
 	addAppInstance,
 	removeInstance,
-	findAppInstance
+	findAppInstance,
+	reconcileGrantedApps,
+	isNewApp,
+	NEW_APP_MS
 } from '../../src/lib/widgets/layout.js';
 
 import { WIDGET_TYPES } from '../../src/lib/widgets/registry.js';
@@ -200,4 +203,85 @@ test('findAppInstance returns the matching tile or null', () => {
 	assert.equal(findAppInstance(layout, 'photos').instanceId, 'a');
 	assert.equal(findAppInstance(layout, 'cloud'), null);
 	assert.equal(findAppInstance(null, 'photos'), null);
+});
+
+// ── Newly granted apps (#135) ──
+
+const NOW = Date.parse('2026-11-25T12:00:00Z');
+const appIds = (layout) => layout.map((i) => i.config.appId);
+const recipes = { id: 'recipes', name: 'Recipes', default: true, selfHosted: true };
+
+test('reconcileGrantedApps seeds seenAppIds with the whole catalog, no pills', () => {
+	const prefs = { widgetLayout: defaultWidgetLayout(sampleCatalog, stubRegistry) };
+	const next = reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { now: NOW });
+	assert.deepEqual(next.seenAppIds.sort(), ['cloud', 'photos', 'vault']);
+	assert.deepEqual(next.newApps, {});
+	assert.deepEqual(appIds(next.widgetLayout), ['photos', 'cloud']);
+});
+
+test('reconcileGrantedApps returns null once everything is seen and placed', () => {
+	const prefs = { widgetLayout: defaultWidgetLayout(sampleCatalog, stubRegistry), seenAppIds: ['photos', 'cloud', 'vault'] };
+	assert.equal(reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { now: NOW }), null);
+	assert.equal(reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { customizable: true, now: NOW }), null);
+});
+
+for (const customizable of [false, true]) {
+	test(`reconcileGrantedApps appends an unseen app with a pill (customization ${customizable ? 'on' : 'off'})`, () => {
+		const prefs = { widgetLayout: defaultWidgetLayout(sampleCatalog, stubRegistry), seenAppIds: ['photos', 'cloud', 'vault'] };
+		const next = reconcileGrantedApps(prefs, [...sampleCatalog, recipes], stubRegistry, { customizable, now: NOW });
+		assert.deepEqual(appIds(next.widgetLayout), ['photos', 'cloud', 'recipes']);
+		assert.ok(next.seenAppIds.includes('recipes'));
+		assert.equal(next.newApps.recipes, new Date(NOW).toISOString());
+		assert.ok(isNewApp(next.newApps, 'recipes', NOW));
+	});
+}
+
+test('reconcileGrantedApps marks an unseen default_visible: false app seen but leaves it off the grid', () => {
+	const prefs = { widgetLayout: [], seenAppIds: [] };
+	const next = reconcileGrantedApps(prefs, [{ id: 'vault', name: 'Vault', default: false }], stubRegistry, { now: NOW });
+	assert.deepEqual(next.widgetLayout, []);
+	assert.deepEqual(next.seenAppIds, ['vault']);
+	assert.deepEqual(next.newApps, {});
+});
+
+test('reconcileGrantedApps with customization off appends seen apps that have no tile, without a pill', () => {
+	// Granted before this change: seeded as seen, never placed.
+	const prefs = { widgetLayout: addAppInstance([], 'photos', stubRegistry) };
+	const next = reconcileGrantedApps(prefs, [...sampleCatalog, recipes], stubRegistry, { now: NOW });
+	assert.deepEqual(appIds(next.widgetLayout), ['photos', 'cloud', 'recipes']);
+	assert.deepEqual(next.newApps, {});
+});
+
+test('reconcileGrantedApps with customization on leaves a removed app off the grid', () => {
+	const prefs = { widgetLayout: addAppInstance([], 'photos', stubRegistry), seenAppIds: ['photos', 'cloud', 'vault'] };
+	assert.equal(reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { customizable: true, now: NOW }), null);
+});
+
+test('reconcileGrantedApps gives no pill to an app whose access came back', () => {
+	// Access lost: the tile stays in the layout, unrendered. Back: nothing to do.
+	const prefs = { widgetLayout: defaultWidgetLayout(sampleCatalog, stubRegistry), seenAppIds: ['photos', 'cloud', 'vault'] };
+	const without = sampleCatalog.filter((a) => a.id !== 'cloud');
+	assert.equal(reconcileGrantedApps(prefs, without, stubRegistry, { now: NOW }), null);
+	assert.equal(reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { customizable: true, now: NOW }), null);
+});
+
+test('reconcileGrantedApps drops pills older than seven days', () => {
+	const seenAt = new Date(NOW).toISOString();
+	const prefs = {
+		widgetLayout: defaultWidgetLayout(sampleCatalog, stubRegistry),
+		seenAppIds: ['photos', 'cloud', 'vault'],
+		newApps: { cloud: seenAt }
+	};
+	assert.equal(reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { now: NOW + NEW_APP_MS - 1 }), null);
+	const next = reconcileGrantedApps(prefs, sampleCatalog, stubRegistry, { now: NOW + NEW_APP_MS });
+	assert.deepEqual(next.newApps, {});
+});
+
+test('isNewApp is false for unknown, unparsable and expired entries', () => {
+	const at = new Date(NOW).toISOString();
+	assert.equal(isNewApp({ recipes: at }, 'recipes', NOW + NEW_APP_MS - 1), true);
+	assert.equal(isNewApp({ recipes: at }, 'recipes', NOW + NEW_APP_MS), false);
+	assert.equal(isNewApp({ recipes: 'garbage' }, 'recipes', NOW), false);
+	assert.equal(isNewApp({}, 'recipes', NOW), false);
+	assert.equal(isNewApp(undefined, 'recipes', NOW), false);
 });
