@@ -18,7 +18,9 @@
 		removeInstance,
 		addAppInstance,
 		findAppInstance,
-		clamp
+		clamp,
+		reconcileGrantedApps,
+		isNewApp
 	} from '$lib/widgets/layout.js';
 	import { POPULAR_APPS } from '$lib/popularApps.js';
 	import { recordOpen } from '$lib/launcher/frecency.js';
@@ -146,6 +148,30 @@
 		});
 	});
 
+	// Apps the user's groups gain land on the grid with a New pill. Runs once
+	// the layout exists, against config apps only: bookmarks are the user's own.
+	$effect(() => {
+		if (!browser || !Array.isArray($prefs.widgetLayout) || configApps.length === 0) return;
+		const apps = configApps;
+		untrack(() => {
+			const next = reconcileGrantedApps($prefs, apps, registry, { customizable: customizationEnabled });
+			if (next) prefs.update((p) => ({ ...p, ...next }));
+		});
+	});
+
+	// Read once per load: a pill that expires mid-session stays until reload.
+	const loadedAt = Date.now();
+	const newApps = $derived($prefs.newApps || {});
+
+	// The first open, or the guide opening in its place, clears the pill.
+	function clearNewApp(appId) {
+		if (!$prefs.newApps?.[appId]) return;
+		prefs.update((p) => {
+			const { [appId]: _, ...rest } = p.newApps || {};
+			return { ...p, newApps: rest };
+		});
+	}
+
 	// Resolve each widget instance to its app for rendering. Skip instances
 	// whose appId is no longer in catalog (e.g. an admin removed the app).
 	const renderInstances = $derived.by(() => {
@@ -200,6 +226,7 @@
 	// Recently-opened apps tracking (lifted unchanged from AppGrid).
 	function recordAppOpen(appId) {
 		recordOpen(`app:${appId}`);
+		clearNewApp(appId);
 		prefs.update((p) => {
 			const prev = Array.isArray(p.recentApps) ? p.recentApps : [];
 			const next = [appId, ...prev.filter((id) => id !== appId)].slice(0, 16);
@@ -357,6 +384,7 @@
 
 	function openGuide(app) {
 		contextApp = null;
+		clearNewApp(app.id);
 		guideApp = app;
 	}
 
@@ -703,6 +731,7 @@
 							// Ctrl/⌘-click still opens a new tab.
 							if (!e.metaKey && !e.ctrlKey && guideOnClick(app)) {
 								e.preventDefault();
+								clearNewApp(app.id);
 								guideApp = app;
 								return;
 							}
@@ -726,6 +755,9 @@
 							</div>
 							{#if healthLine(app, health[app.id])}
 								<span class="health-dot health-{healthLine(app, health[app.id]).tone}" aria-hidden="true"></span>
+							{/if}
+							{#if isNewApp(newApps, app.id, loadedAt)}
+								<span class="new-pill">New</span>
 							{/if}
 						</span>
 						<span class="app-tile-name">{app.name}</span>
@@ -1148,6 +1180,28 @@
 		color: var(--color-content);
 		text-decoration: underline;
 		text-underline-offset: 3px;
+	}
+	/* New pill: straddles the icon's bottom edge, clear of the health dot
+	   (top right) and the edit-mode × (tile corner). */
+	.new-pill {
+		position: absolute;
+		left: 50%;
+		bottom: -7px;
+		transform: translateX(-50%);
+		padding: 1px 6px;
+		border-radius: 9999px;
+		background: #fbbf24;
+		color: #1c1917;
+		font-size: 0.6rem;
+		font-weight: 600;
+		line-height: 1.2;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		box-shadow: 0 0 0 2px var(--health-ring, rgba(20, 20, 22, 0.85));
+		pointer-events: none;
+	}
+	:global(body.theme-light) .new-pill {
+		--health-ring: #fff;
 	}
 	.app-tile-name {
 		font-size: 0.7rem;

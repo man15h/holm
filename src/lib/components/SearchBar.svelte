@@ -387,8 +387,18 @@
 	}
 
 	// Only app opens feed frecency: they're the only keys it ranks, and
-	// one-off result opens would otherwise evict app history.
-	const noteOpen = (key) => { if (key.startsWith('app:')) recordOpen(key); };
+	// one-off result opens would otherwise evict app history. An app open
+	// also clears its New pill on the grid.
+	function noteOpen(key) {
+		if (!key.startsWith('app:')) return;
+		recordOpen(key);
+		const id = key.slice(4);
+		if (!$prefs.newApps?.[id]) return;
+		prefs.update((p) => {
+			const { [id]: _, ...rest } = p.newApps || {};
+			return { ...p, newApps: rest };
+		});
+	}
 
 	// A single result opens and leaves the list where it was, so the next one
 	// is a click away; launching an app, "More in …" and the web search close it.

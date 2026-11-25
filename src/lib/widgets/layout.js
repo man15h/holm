@@ -157,3 +157,54 @@ export function findAppInstance(layout, appId) {
 	}
 	return null;
 }
+
+// How long a newly granted app keeps its New pill if it's never opened.
+export const NEW_APP_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Bring the layout up to date with the apps the user's groups grant.
+// `seenAppIds` is every catalog app this user has been shown; `newApps` maps
+// an appId to when it was first seen, for the New pill. The first run seeds
+// `seenAppIds` with the whole catalog, so existing users get no pills. After
+// that, an unseen app is appended with a pill. With customization off, a seen
+// app with no tile is appended too, without one; with it on, that app is one
+// the user removed. Apps marked default_visible: false are never appended.
+// Returns null when nothing changed, so callers can skip the prefs write.
+export function reconcileGrantedApps(prefs, catalog, registry, { customizable = false, now = Date.now() } = {}) {
+	if (!Array.isArray(catalog) || !registry[WIDGET_TYPES.APP]) return null;
+	const layout0 = Array.isArray(prefs?.widgetLayout) ? prefs.widgetLayout : [];
+	const seeding = !Array.isArray(prefs?.seenAppIds);
+	const seen = new Set(seeding ? catalog.map((a) => a.id) : prefs.seenAppIds);
+	const newApps = { ...(prefs?.newApps || {}) };
+	let layout = layout0;
+	let changed = seeding;
+
+	for (const app of catalog) {
+		if (seen.has(app.id)) {
+			if (customizable || app.default === false || findAppInstance(layout, app.id)) continue;
+			layout = addAppInstance(layout, app.id, registry);
+		} else {
+			seen.add(app.id);
+			if (app.default !== false && !findAppInstance(layout, app.id)) {
+				layout = addAppInstance(layout, app.id, registry);
+				newApps[app.id] = new Date(now).toISOString();
+			}
+		}
+		changed = true;
+	}
+
+	for (const [id, at] of Object.entries(newApps)) {
+		if (isNewApp(newApps, id, now)) continue;
+		delete newApps[id];
+		changed = true;
+	}
+
+	if (!changed) return null;
+	return { widgetLayout: layout, seenAppIds: [...seen], newApps };
+}
+
+// True while an app's New pill should show: first seen under NEW_APP_MS ago
+// and not opened since (opening drops it from `newApps`).
+export function isNewApp(newApps, appId, now = Date.now()) {
+	const at = Date.parse(newApps?.[appId]);
+	return Number.isFinite(at) && now - at < NEW_APP_MS;
+}
