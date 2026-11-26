@@ -15,7 +15,7 @@
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
 	import { searchOnFocus } from '$lib/searchOnFocus.js';
-	import { oneAtATime, progressOf, setTask } from '$lib/checklist.js';
+	import { htmlProgressOf, oneAtATime, progressOf, setHtmlTask, setTask } from '$lib/checklist.js';
 	import { searchTransparency, searchGlassLevel, searchHints } from '$lib/searchLook.js';
 
 	const siteConfig = getContext('config');
@@ -505,11 +505,12 @@
 		detailView = null;
 	}
 
-	// A checklist box in the detail view (a memo's): saved through the
-	// integration's action, then shown ticked, with the done counts on the
-	// facts and on the result row following. `taskStates` holds, by box,
+	// A checklist box in the detail view (a memo's or a Vikunja task's): saved
+	// through the integration's action, then shown ticked, with the done counts
+	// on the facts and on the result row following. `taskStates` holds, by box,
 	// 'saving' or the error with what to retry. Saves go one at a time: each
-	// rewrites the whole memo from a fresh read, so two at once would lose one.
+	// rewrites the whole memo or task from a fresh read, so two at once would
+	// lose one.
 	const nextSave = oneAtATime();
 	async function checkTask(index, checked, text) {
 		const view = detailView;
@@ -532,11 +533,14 @@
 			setState({ error: res.message, checked, text });
 			return;
 		}
-		const markdown = setTask(detailView.data.markdown, index, checked) ?? detailView.data.markdown;
-		const progress = progressOf(markdown);
+		const { markdown, html } = detailView.data;
+		const body = markdown != null
+			? { markdown: setTask(markdown, index, checked) ?? markdown }
+			: { html: setHtmlTask(html, index, checked) ?? html };
+		const progress = body.markdown != null ? progressOf(body.markdown) : htmlProgressOf(body.html);
 		const facts = (detailView.data.facts || []).map((f) => (progress && /^\d+ of \d+ done$/.test(f) ? `${progress.done} of ${progress.total} done` : f));
 		if (detailView.r.meta) detailView.r.meta.progress = progress;
-		detailView = { ...detailView, data: { ...detailView.data, markdown, facts } };
+		detailView = { ...detailView, data: { ...detailView.data, ...body, facts } };
 		setState(null);
 	}
 

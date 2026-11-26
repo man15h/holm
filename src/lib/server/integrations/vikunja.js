@@ -5,8 +5,10 @@
 //     they can see (open ones first)
 //   - searchProviders.quickadd — one row under `!vk`: Enter files the typed
 //     text as a new task in the user's Inbox
-//   - details — a task's project, due date, priority, people and description
+//   - details — a task's project, due date, priority, people and description,
+//     with the description's checklist live
 //   - actions.create — the write the quickadd row carries
+//   - actions.check — ticks or unticks one checklist item in a description
 //
 // Needs Vikunja 1.0 or later for /tasks (the /tasks/all route was renamed)
 // and an API token, which is what /user answers a token with. Vikunja itself
@@ -17,6 +19,7 @@
 // names are cached per token, so the lookup never runs per keystroke;
 // `cache_ttl` sets the seconds, like on Plane.
 
+import { htmlProgressOf, htmlTasksOf, sameTask, setHtmlTask } from '../../checklist.js';
 import { getIntegrationsConfig } from '../config.js';
 
 const cache = new Map();
@@ -65,7 +68,7 @@ const adapter = {
 			type: 'secret',
 			label: 'API token',
 			required: true,
-			help: '1. Open **Settings** → **API tokens**\n2. Create a token: under **tasks**, tick read and create; under **projects**, tick read\n3. Copy the token — it is only shown once',
+			help: '1. Open **Settings** → **API tokens**\n2. Create a token: under **tasks**, tick read, create and update; under **projects**, tick read; under **other**, tick user\n3. Copy the token — it is only shown once',
 			helpUrl: { baseKey: 'url', path: '/user/settings/api-tokens', label: 'Open Vikunja API tokens' }
 		}
 	],
@@ -158,7 +161,7 @@ const adapter = {
 						href: `${base}/tasks/${t.id}`,
 						openLabel: 'Open in Vikunja',
 						detail: { id: String(t.id) },
-						meta: { kind: 'card', status: t.done ? 'Done' : '' }
+						meta: { kind: 'card', status: t.done ? 'Done' : '', progress: htmlProgressOf(htmlOf(t)) }
 					}))
 				};
 			}
@@ -206,10 +209,36 @@ const adapter = {
 					throw err;
 				}
 			}
+		},
+
+		/**
+		 * Ticks or unticks task `index` in the description. The task is read
+		 * again first and only that item changes, so an edit made in Vikunja
+		 * meanwhile is kept; when the item no longer reads `text`, nothing is
+		 * saved.
+		 */
+		check: {
+			async run({ config, params, fetch }) {
+				const { id, index, checked, text } = params || {};
+				if (!config?.url || !config?.token || !TASK_ID.test(id || '') || !Number.isInteger(index) || index < 0 || typeof checked !== 'boolean') {
+					return { ok: false, message: 'Invalid checklist item' };
+				}
+				try {
+					return await saveTask(stripTrailingSlash(config.url), config, fetch, { id, index, checked, text });
+				} catch (err) {
+					if (err?.name === 'TypeError' || err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+						return { ok: false, message: 'Can’t reach Vikunja. Check the connection.' };
+					}
+					throw err;
+				}
+			}
 		}
 	},
 
-	/** A task's facts and description; project names come from the cache. */
+	/**
+	 * A task's facts and description, its checklist live (actions.check saves
+	 * it); project names come from the cache.
+	 */
 	async details({ config, params, fetch }) {
 		if (!config?.url || !config?.token || !TASK_ID.test(params?.id || '')) return null;
 		const base = stripTrailingSlash(config.url);
@@ -223,6 +252,8 @@ const adapter = {
 		const priority = PRIORITY[t.priority];
 		const due = dueOf(t.due_date);
 		const project = projects.get(t.project_id);
+		const html = htmlOf(t);
+		const progress = htmlProgressOf(html);
 		const fields = [
 			project && { label: 'Project', value: project },
 			due && { label: 'Due', value: due.text, warn: due.warn },
@@ -236,15 +267,48 @@ const adapter = {
 			facts: [
 				t.identifier && `#${String(t.identifier).replace(/^#/, '')}`,
 				t.done && dateOf(t.done_at) && `Done ${shortDate(t.done_at)}`,
-				dateOf(t.created) && `Created ${shortDate(t.created)}`
+				dateOf(t.created) && `Created ${shortDate(t.created)}`,
+				progress && `${progress.done} of ${progress.total} done`
 			].filter(Boolean),
 			fields,
-			markdown: (t.description || '').trim()
+			...(html ? { html, checklist: { key: 'check', params: { id: params.id } } } : { markdown: (t.description || '').trim() })
 		};
 	},
 
 	widgets: {}
 };
+
+// Re-reads the task, then saves item `index` if it still reads `text`.
+// Vikunja replaces the whole task on an update, so what it sent goes back
+// with only the description changed.
+async function saveTask(base, config, fetch, { id, index, checked, text }) {
+	const res = await fetch(`${base}/api/v1/tasks/${id}`, { method: 'GET', headers: headersOf(config) });
+	if (!res.ok) throw new Error(res.status === 404 ? 'This task is gone from Vikunja' : `Vikunja answered ${res.status}`);
+	const t = await res.json();
+	const html = htmlOf(t);
+	const task = htmlTasksOf(html)[index];
+	if (!task || !sameTask(task.text, text)) {
+		return { ok: false, message: 'This task changed in Vikunja. Go back and open it again.' };
+	}
+	if (task.checked === checked) return { ok: true, message: 'Saved' };
+	const saved = await fetch(`${base}/api/v1/tasks/${id}`, {
+		method: 'POST',
+		headers: { ...headersOf(config), 'content-type': 'application/json' },
+		body: JSON.stringify({ ...t, description: setHtmlTask(t.description, index, checked) })
+	});
+	if (!saved.ok) {
+		if (saved.status === 401 || saved.status === 403) return { ok: false, message: 'Vikunja refused the change. The token needs tasks → update.' };
+		return { ok: false, message: `Vikunja answered ${saved.status}` };
+	}
+	return { ok: true, message: 'Saved' };
+}
+
+// A description from Vikunja's editor is HTML; one written through the API
+// may be plain text or Markdown, shown as such without live boxes.
+function htmlOf(t) {
+	const d = (t?.description || '').trim();
+	return d.startsWith('<') ? d : '';
+}
 
 // The user, their default project and the project names, cached per token:
 // every lookup runs on a keystroke and has to be served from one call.
