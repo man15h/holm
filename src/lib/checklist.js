@@ -39,6 +39,40 @@ export function setTask(markdown, index, checked) {
 	return lines.join('\n');
 }
 
+// HTML task lists as Vikunja's editor saves them: an <li data-type="taskItem">
+// whose data-checked holds the state, its box drawn in a <label> before the
+// text. The nth task is again the nth checkbox the detail view shows.
+const HTML_TASK = /<li\b[^>]*\bdata-type="taskItem"[^>]*>/g;
+
+/** @returns {{ checked: boolean, text: string }[]} */
+export function htmlTasksOf(html) {
+	return [...(html || '').matchAll(HTML_TASK)].map((m) => {
+		// The item's own text: up to a list nested in it, or the next item.
+		const own = html.slice(m.index + m[0].length).split(/<(?:ul|ol|li)\b|<\/li>/i)[0];
+		return { checked: /\bdata-checked="true"/.test(m[0]), text: own.replace(/<[^>]*>|&[#\w]+;/g, ' ').trim() };
+	});
+}
+
+/** Done and total, or null when there are no tasks. */
+export function htmlProgressOf(html) {
+	const tasks = htmlTasksOf(html);
+	return tasks.length ? { done: tasks.filter((t) => t.checked).length, total: tasks.length } : null;
+}
+
+/** The HTML with task `index` ticked or not; null when there's no such task. */
+export function setHtmlTask(html, index, checked) {
+	const m = [...(html || '').matchAll(HTML_TASK)][index];
+	if (!m) return null;
+	const open = /\bdata-checked="[^"]*"/.test(m[0])
+		? m[0].replace(/\bdata-checked="[^"]*"/, `data-checked="${checked}"`)
+		: m[0].replace(/^<li\b/, `<li data-checked="${checked}"`);
+	const rest = html.slice(m.index + m[0].length).replace(/^(\s*<label\b[^>]*>\s*)(<input\b[^>]*>)/, (_, label, input) => {
+		const box = input.replace(/\s+checked(?:="[^"]*")?/g, '');
+		return label + (checked ? box.replace(/^<input\b/, '<input checked="checked"') : box);
+	});
+	return html.slice(0, m.index) + open + rest;
+}
+
 /**
  * Whether a task's Markdown and a checkbox's text name the same item, so a
  * box isn't saved onto a line that moved since the memo was opened. Letters
